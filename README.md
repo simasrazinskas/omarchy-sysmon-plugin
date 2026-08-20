@@ -12,29 +12,28 @@ each chip, so the bar can be as small as a single CPU reading or as full as the
 line above. Hover for the same values as a tooltip.
 
 ```
-┌──────────────────────────────┐
-│ System Monitor               │
-│ NVIDIA GPU                   │
-│ ──── READINGS ────           │
-│ CPU        12.4%  ·  42°     │
-│ RAM     18G / 31G  ·  33%    │
-│ GPU          64%  ·  71°     │
-│ VRAM       9.2G / 16G        │
-│ NET    ↓ 1.2M/s ↑ 340K/s     │
-│ DISK        23%  ·  /        │
-│ ──── SHOW IN BAR ────        │
-│ CPU usage              [on]  │
-│ Memory                 [on]  │
-│ CPU temperature        [on]  │
-│ GPU usage              [on]  │
-│ ...                          │
-└──────────────────────────────┘
+┌────────────────────────────────────────┐
+│ System Monitor  · NVIDIA               │
+│ ────────────────────────────────────── │
+│ CPU usage                 12.4%  (on)  │
+│ Memory                18G / 31G  (on)  │
+│ CPU temperature             42°  (on)  │
+│ GPU usage                   64%  (on)  │
+│ GPU temperature             71°  (on)  │
+│ VRAM used            9.2G / 16G  (off) │
+│ Network            ↓ 1.2M ↑ 340K (on)  │
+│ Disk usage                  23%  (on)  │
+└────────────────────────────────────────┘
 ```
 
+Reading and switch share a line, which is what keeps the panel short enough to
+fit without scrolling. Every metric is listed on every row whether or not its
+chip is in the bar — switching one off hides it from the bar, not from the
+panel — and a metric with nothing to read (no GPU, no sensor) shows a dimmed
+`—` rather than vanishing, so its switch keeps its label.
+
 The panel's switches and the plugin settings screen write the same values, so
-the two can never drift apart. The panel always lists **every** reading the
-widget has, whether or not its chip is in the bar — switching a chip off hides
-it from the bar, not from the panel.
+the two can never drift apart.
 
 ## Install
 

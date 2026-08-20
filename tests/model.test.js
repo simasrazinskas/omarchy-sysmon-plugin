@@ -362,6 +362,40 @@ test("every panel toggle drives a chip the bar actually renders", () => {
   assert.ok(chipKeys.size > 0)
 })
 
+test("panelRows lists one row per switch, always, in bar order", () => {
+  // Fixed row count is what keeps the popup a predictable height — the panel
+  // clipped its last rows when the content could grow.
+  const rows = Model.panelRows(fullState(), {})
+  assert.equal(rows.length, Model.TOGGLES.length)
+  assert.deepEqual(rows.map(r => r.key), Model.TOGGLES.map(t => t.key))
+})
+
+test("panelRows keeps its row count when a metric has no reading at all", () => {
+  const state = fullState()
+  state.gpu = null
+  state.cpuTemp = null
+  const rows = Model.panelRows(state, {})
+  assert.equal(rows.length, Model.TOGGLES.length)
+  const gpu = rows.find(r => r.key === "showGpu")
+  assert.equal(gpu.value, "—")
+  assert.equal(gpu.available, false)
+  assert.equal(rows.find(r => r.key === "showCpu").available, true)
+})
+
+test("panelRows reports each switch's current state, falling back to defaults", () => {
+  const rows = Model.panelRows(fullState(), { showCpu: false })
+  assert.equal(rows.find(r => r.key === "showCpu").enabled, false)
+  // Not specified in options, so the manifest default applies.
+  assert.equal(rows.find(r => r.key === "showRam").enabled, true)
+  assert.equal(rows.find(r => r.key === "showVram").enabled, false)
+})
+
+test("panelRows shows readings for metrics switched off in the bar", () => {
+  const row = Model.panelRows(fullState(), { showDisk: false }).find(r => r.key === "showDisk")
+  assert.equal(row.enabled, false)
+  assert.equal(row.value, "23%")
+})
+
 test("panel toggle defaults match the manifest defaults", () => {
   const manifest = require("../manifest.json")
   for (const toggle of Model.TOGGLES) {

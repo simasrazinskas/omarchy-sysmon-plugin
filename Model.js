@@ -382,6 +382,43 @@ function tooltipText(state, options) {
   return lines.join("\n")
 }
 
+// One row per switchable chip: its label, its current reading, and whether it
+// is in the bar. Collapsing the readings and the switches into a single list
+// keeps the panel short enough to fit — a separate readings section plus
+// full-size toggle cards overflowed the popup and clipped the last rows.
+function panelRows(state, options) {
+  var data = state || {}
+  var opts = options || {}
+  var unit = opts.tempUnit || "C"
+
+  var values = {
+    showCpu: data.cpu !== null && data.cpu !== undefined ? (Math.round(data.cpu * 10) / 10) + "%" : "",
+    showRam: data.mem ? formatBytes(data.mem.used) + " / " + formatBytes(data.mem.total) : "",
+    showCpuTemp: formatTemp(data.cpuTemp, unit),
+    showGpu: data.gpu && data.gpu.util !== null && data.gpu.util !== undefined ? formatPercent(data.gpu.util) : "",
+    showGpuTemp: data.gpu ? formatTemp(data.gpu.temp, unit) : "",
+    showVram: data.gpu && data.gpu.vramTotal ? formatBytes(data.gpu.vramUsed) + " / " + formatBytes(data.gpu.vramTotal) : "",
+    showNet: data.net ? "↓ " + formatBytes(data.net.down) + "  ↑ " + formatBytes(data.net.up) : "",
+    showDisk: data.disk !== null && data.disk !== undefined ? formatPercent(data.disk) : ""
+  }
+
+  var rows = []
+  for (var i = 0; i < TOGGLES.length; i++) {
+    var toggle = TOGGLES[i]
+    var value = values[toggle.key] || ""
+    rows.push({
+      key: toggle.key,
+      label: toggle.label,
+      // An em dash rather than a blank keeps the column aligned and says
+      // "nothing to read here" without implying a measurement of zero.
+      value: value !== "" ? value : "—",
+      available: value !== "",
+      enabled: opts[toggle.key] === undefined ? toggle.defaultValue : opts[toggle.key] === true
+    })
+  }
+  return rows
+}
+
 // The chips the panel offers as switches, in the order they render in the bar.
 // `key` is the settings key the toggle writes, so the panel and the plugin
 // settings screen drive exactly the same values.
@@ -419,6 +456,7 @@ if (typeof module !== "undefined") {
     barText: barText,
     barTextVertical: barTextVertical,
     detailRows: detailRows,
+    panelRows: panelRows,
     tooltipText: tooltipText,
     TOGGLES: TOGGLES
   }

@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
@@ -36,7 +35,7 @@ Panel {
     ? Model.barTextVertical(service.state, options)
     : Model.barText(service.state, options)
 
-  readonly property var rows: Model.detailRows(service.state, options)
+  readonly property var rows: Model.panelRows(service.state, options)
   readonly property bool vertical: bar ? bar.vertical : false
 
   // Mirrors the clock's format cycling and the t212 widget: apply locally for
@@ -119,8 +118,8 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(340))
-    contentHeight: panel.fittedContentHeight(content.implicitHeight + Style.space(12), Style.space(640))
+    contentWidth: panel.fittedContentWidth(Style.space(360))
+    contentHeight: panel.fittedContentHeight(content.implicitHeight, Style.space(640))
 
     PanelKeyCatcher {
       id: keyCatcher
@@ -128,114 +127,84 @@ Panel {
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
 
-      ColumnLayout {
+      // A plain Column rather than a ColumnLayout: implicitHeight is then the
+      // simple sum of the children, which is what the popup sizes itself from.
+      Column {
         id: content
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        spacing: Style.space(12)
+        spacing: Style.space(8)
 
-        Column {
-          Layout.fillWidth: true
-          spacing: Style.space(2)
+        Row {
+          width: parent.width
+          spacing: Style.space(6)
 
           Text {
+            anchors.baseline: vendorLabel.baseline
             text: "System Monitor"
             color: root.foreground
             font.family: root.fontFamily
-            font.pixelSize: Style.font.title
+            font.pixelSize: Style.font.subtitle
             renderType: Text.NativeRendering
           }
 
+          // The vendor sits on the title's line rather than under it: one row
+          // saved is one row the switches below do not lose.
           Text {
-            visible: text !== ""
-            text: service.gpuVendor !== "" ? service.gpuVendor.toUpperCase() + " GPU" : "No supported GPU detected"
+            id: vendorLabel
+            text: service.gpuVendor !== "" ? "· " + service.gpuVendor.toUpperCase() : "· no GPU"
             color: root.dim
             font.family: root.fontFamily
-            font.pixelSize: Style.font.bodySmall
+            font.pixelSize: Style.font.caption
             renderType: Text.NativeRendering
           }
         }
 
-        PanelSeparator { Layout.fillWidth: true }
+        PanelSeparator { width: parent.width }
 
-        PanelSectionHeader {
-          text: "READINGS"
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-        }
+        // Reading and switch on one line each. Every metric is listed whether
+        // or not it is in the bar, so the panel is the full readout as well as
+        // the control surface.
+        Repeater {
+          model: root.rows
 
-        // Every reading the widget has, whether or not its chip is in the bar —
-        // switching a chip off hides it from the bar, not from here.
-        Column {
-          Layout.fillWidth: true
-          spacing: Style.space(6)
+          Item {
+            width: content.width
+            implicitHeight: Math.max(toggleSwitch.implicitHeight, rowLabel.implicitHeight)
 
-          Repeater {
-            model: root.rows
-
-            Item {
-              width: parent ? parent.width : 0
-              implicitHeight: Math.max(rowLabel.implicitHeight, rowValue.implicitHeight)
-
-              Text {
-                id: rowLabel
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.label
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.bodySmall
-                renderType: Text.NativeRendering
-              }
-
-              Text {
-                id: rowValue
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                text: modelData.value
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                renderType: Text.NativeRendering
-              }
+            Text {
+              id: rowLabel
+              anchors.left: parent.left
+              anchors.verticalCenter: parent.verticalCenter
+              text: modelData.label
+              color: root.foreground
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.bodySmall
+              renderType: Text.NativeRendering
             }
-          }
-        }
 
-        Text {
-          Layout.fillWidth: true
-          visible: root.rows.length === 0
-          text: "Taking first readings…"
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.bodySmall
-          renderType: Text.NativeRendering
-        }
+            Text {
+              id: rowValue
+              anchors.right: toggleSwitch.left
+              anchors.rightMargin: Style.space(10)
+              anchors.verticalCenter: parent.verticalCenter
+              text: modelData.value
+              // A metric with no reading — no GPU, no sensor — dims rather
+              // than disappearing, so its switch still has a label.
+              color: modelData.available ? root.foreground : root.dim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.body
+              renderType: Text.NativeRendering
+            }
 
-        PanelSeparator { Layout.fillWidth: true }
-
-        PanelSectionHeader {
-          text: "SHOW IN BAR"
-          foreground: root.foreground
-          fontFamily: root.fontFamily
-        }
-
-        Column {
-          Layout.fillWidth: true
-          spacing: Style.space(4)
-
-          Repeater {
-            model: Model.TOGGLES
-
-            Toggle {
-              width: parent ? parent.width : 0
-              label: modelData.label
-              checked: root.options[modelData.key] === true
+            ToggleSwitch {
+              id: toggleSwitch
+              anchors.right: parent.right
+              anchors.verticalCenter: parent.verticalCenter
+              checked: modelData.enabled
               foreground: root.foreground
-              fontFamily: root.fontFamily
-              titleSize: Style.font.body
-              onClicked: root.persistSetting(modelData.key, !checked)
+              onToggled: root.persistSetting(modelData.key, !modelData.enabled)
             }
           }
         }
