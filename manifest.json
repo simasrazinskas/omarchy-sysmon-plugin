@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.simasrazinskas.sysmon",
+  "name": "System Monitor",
+  "version": "0.1.0",
+  "author": "Simas Razinskas",
+  "license": "MIT",
+  "description": "Machine vitals in the Omarchy bar: CPU, RAM, temperatures, GPU, network throughput and disk usage, each toggleable.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Widget.qml"
+  },
+  "barWidget": {
+    "displayName": "System Monitor",
+    "description": "CPU, RAM, temperature, GPU, network and disk readings in the bar; hover for full values, left-click for btop.",
+    "category": "System",
+    "aliases": ["sysmon", "system", "cpu", "ram", "gpu", "monitor", "stats", "temperature"],
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "showCpu": true,
+      "showRam": true,
+      "showCpuTemp": true,
+      "showGpu": true,
+      "showGpuTemp": true,
+      "showVram": false,
+      "showNet": true,
+      "showDisk": true,
+      "refreshIntervalSec": 2,
+      "ramDisplay": "used",
+      "tempUnit": "C",
+      "networkInterface": "",
+      "diskMountpoint": ""
+    },
+    "schema": [
+      {
+        "key": "showCpu",
+        "type": "boolean",
+        "label": "Show CPU usage",
+        "defaultValue": true
+      },
+      {
+        "key": "showRam",
+        "type": "boolean",
+        "label": "Show memory",
+        "defaultValue": true
+      },
+      {
+        "key": "showCpuTemp",
+        "type": "boolean",
+        "label": "Show CPU temperature",
+        "defaultValue": true
+      },
+      {
+        "key": "showGpu",
+        "type": "boolean",
+        "label": "Show GPU usage",
+        "defaultValue": true,
+        "description": "Hidden automatically when no supported GPU is detected."
+      },
+      {
+        "key": "showGpuTemp",
+        "type": "boolean",
+        "label": "Show GPU temperature",
+        "defaultValue": true
+      },
+      {
+        "key": "showVram",
+        "type": "boolean",
+        "label": "Show VRAM used",
+        "defaultValue": false
+      },
+      {
+        "key": "showNet",
+        "type": "boolean",
+        "label": "Show network throughput",
+        "defaultValue": true
+      },
+      {
+        "key": "showDisk",
+        "type": "boolean",
+        "label": "Show disk usage",
+        "defaultValue": true
+      },
+      {
+        "key": "ramDisplay",
+        "type": "enum",
+        "label": "Memory shown as",
+        "options": ["used", "percent"],
+        "defaultValue": "used"
+      },
+      {
+        "key": "tempUnit",
+        "type": "enum",
+        "label": "Temperature unit",
+        "options": ["C", "F"],
+        "defaultValue": "C"
+      },
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 1,
+        "max": 30,
+        "step": 1,
+        "defaultValue": 2
+      },
+      {
+        "key": "networkInterface",
+        "type": "string",
+        "label": "Network interface",
+        "defaultValue": "",
+        "description": "Leave blank to follow the default route."
+      },
+      {
+        "key": "diskMountpoint",
+        "type": "string",
+        "label": "Disk mountpoint",
+        "defaultValue": "",
+        "description": "Leave blank for the root filesystem."
+      }
+    ]
+  }
+}
