@@ -318,41 +318,83 @@ function barTextVertical(state, options) {
   return parts.join("\n")
 }
 
-// The tooltip is this widget's only detail surface — there is no popup panel —
-// so it carries the full-precision values and the totals the bar has no room
-// for, including chips the user has switched off.
-function tooltipText(state, options) {
+// Full-precision readings, independent of which chips are switched on: the bar
+// is the summary, this is everything the widget knows. Both the panel and the
+// hover tooltip render from this one list so they can never disagree.
+function detailRows(state, options) {
   var data = state || {}
   var opts = options || {}
   var unit = opts.tempUnit || "C"
-  var lines = []
+  var rows = []
 
   if (data.cpu !== null && data.cpu !== undefined) {
-    var cpuLine = "CPU  " + (Math.round(data.cpu * 10) / 10) + "%"
-    if (data.cpuTemp !== null && data.cpuTemp !== undefined) cpuLine += "  ·  " + formatTemp(data.cpuTemp, unit)
-    lines.push(cpuLine)
+    var cpu = (Math.round(data.cpu * 10) / 10) + "%"
+    if (data.cpuTemp !== null && data.cpuTemp !== undefined) cpu += "  ·  " + formatTemp(data.cpuTemp, unit)
+    rows.push({ key: "cpu", label: "CPU", value: cpu })
   }
   if (data.mem) {
-    lines.push("RAM  " + formatBytes(data.mem.used) + " / " + formatBytes(data.mem.total)
-      + "  ·  " + formatPercent(data.mem.percent))
+    rows.push({
+      key: "ram",
+      label: "RAM",
+      value: formatBytes(data.mem.used) + " / " + formatBytes(data.mem.total) + "  ·  " + formatPercent(data.mem.percent)
+    })
   }
   if (data.gpu) {
-    var gpuLine = "GPU  " + formatPercent(data.gpu.util)
-    if (data.gpu.temp !== null && data.gpu.temp !== undefined) gpuLine += "  ·  " + formatTemp(data.gpu.temp, unit)
-    lines.push(gpuLine)
+    var gpu = formatPercent(data.gpu.util)
+    if (data.gpu.temp !== null && data.gpu.temp !== undefined) gpu += "  ·  " + formatTemp(data.gpu.temp, unit)
+    rows.push({ key: "gpu", label: "GPU", value: gpu })
     if (data.gpu.vramTotal) {
-      lines.push("VRAM " + formatBytes(data.gpu.vramUsed) + " / " + formatBytes(data.gpu.vramTotal))
+      rows.push({
+        key: "vram",
+        label: "VRAM",
+        value: formatBytes(data.gpu.vramUsed) + " / " + formatBytes(data.gpu.vramTotal)
+      })
     }
   }
   if (data.net) {
-    lines.push("NET  ↓ " + formatBytes(data.net.down) + "/s  ↑ " + formatBytes(data.net.up) + "/s"
-      + (data.netInterface ? "  ·  " + data.netInterface : ""))
+    rows.push({
+      key: "net",
+      label: "NET",
+      value: "↓ " + formatBytes(data.net.down) + "/s  ↑ " + formatBytes(data.net.up) + "/s"
+        + (data.netInterface ? "  ·  " + data.netInterface : "")
+    })
   }
   if (data.disk !== null && data.disk !== undefined) {
-    lines.push("DISK " + formatPercent(data.disk) + (data.diskMount ? "  ·  " + data.diskMount : ""))
+    rows.push({
+      key: "disk",
+      label: "DISK",
+      value: formatPercent(data.disk) + (data.diskMount ? "  ·  " + data.diskMount : "")
+    })
+  }
+  return rows
+}
+
+// The hover tooltip is the same readings as the panel, flattened. Labels are
+// padded to a constant width so the values line up in a monospace tooltip.
+function tooltipText(state, options) {
+  var rows = detailRows(state, options)
+  var lines = []
+  for (var i = 0; i < rows.length; i++) {
+    var label = rows[i].label
+    while (label.length < 4) label += " "
+    lines.push(label + " " + rows[i].value)
   }
   return lines.join("\n")
 }
+
+// The chips the panel offers as switches, in the order they render in the bar.
+// `key` is the settings key the toggle writes, so the panel and the plugin
+// settings screen drive exactly the same values.
+var TOGGLES = [
+  { key: "showCpu", label: "CPU usage", defaultValue: true },
+  { key: "showRam", label: "Memory", defaultValue: true },
+  { key: "showCpuTemp", label: "CPU temperature", defaultValue: true },
+  { key: "showGpu", label: "GPU usage", defaultValue: true },
+  { key: "showGpuTemp", label: "GPU temperature", defaultValue: true },
+  { key: "showVram", label: "VRAM used", defaultValue: false },
+  { key: "showNet", label: "Network throughput", defaultValue: true },
+  { key: "showDisk", label: "Disk usage", defaultValue: true }
+]
 
 if (typeof module !== "undefined") {
   module.exports = {
@@ -376,6 +418,8 @@ if (typeof module !== "undefined") {
     buildChips: buildChips,
     barText: barText,
     barTextVertical: barTextVertical,
-    tooltipText: tooltipText
+    detailRows: detailRows,
+    tooltipText: tooltipText,
+    TOGGLES: TOGGLES
   }
 }

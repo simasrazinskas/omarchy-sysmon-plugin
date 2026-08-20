@@ -1,15 +1,40 @@
 # System Monitor — Omarchy bar plugin
 
 Machine vitals in the [Omarchy](https://omarchy.org) status bar: CPU, memory,
-temperature, GPU, network throughput and disk usage. Hover for full values,
-click for `btop`.
+temperature, GPU, network throughput and disk usage.
 
 ```
  12%   18G   42°   64%  71°   1.2M   340K   23%
 ```
 
-Every chip can be switched off in the plugin settings, so the widget can be as
-small as a single CPU reading or as full as the line above.
+**Click for a panel** with every reading at full precision and a switch for
+each chip, so the bar can be as small as a single CPU reading or as full as the
+line above. Hover for the same values as a tooltip.
+
+```
+┌──────────────────────────────┐
+│ System Monitor               │
+│ NVIDIA GPU                   │
+│ ──── READINGS ────           │
+│ CPU        12.4%  ·  42°     │
+│ RAM     18G / 31G  ·  33%    │
+│ GPU          64%  ·  71°     │
+│ VRAM       9.2G / 16G        │
+│ NET    ↓ 1.2M/s ↑ 340K/s     │
+│ DISK        23%  ·  /        │
+│ ──── SHOW IN BAR ────        │
+│ CPU usage              [on]  │
+│ Memory                 [on]  │
+│ CPU temperature        [on]  │
+│ GPU usage              [on]  │
+│ ...                          │
+└──────────────────────────────┘
+```
+
+The panel's switches and the plugin settings screen write the same values, so
+the two can never drift apart. The panel always lists **every** reading the
+widget has, whether or not its chip is in the bar — switching a chip off hides
+it from the bar, not from the panel.
 
 ## Install
 
@@ -22,8 +47,9 @@ it along the bar.
 
 ## Settings
 
-Everything lives in the standard plugin settings screen — there is no config
-file to hand-edit.
+The chip switches are in the panel itself; everything else lives in the
+standard plugin settings screen. Both write the same keys, and there is no
+config file to hand-edit.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -65,15 +91,15 @@ Worth being upfront about, so nobody files a bug for a deliberate choice:
 - **No colour thresholds.** Chips stay in the theme foreground whatever the
   machine is doing. The widget never fights your theme; the flip side is that
   98°C looks the same as 42°C.
-- **No detail panel.** Left-click opens `btop`, which is a better system
-  monitor than anything this widget could draw. The hover tooltip carries the
-  full values, including chips you have switched off.
+- **No graphs or history.** The panel shows current values, not trends. Keeping
+  ring buffers per metric and redrawing a canvas every tick is a bigger feature
+  than it looks; `btop` is there for the deep view.
 - **No presets, and a fixed chip order.** Per-widget settings live in the bar's
   `shell.json` layout entry, and the plugin manifest schema supports only
   scalar values — no arrays, no nested objects. There is nowhere to store named
   presets or a custom ordering. Chips always render in the order shown above.
 - **No per-core, per-process, swap, fan or battery readings.** Out of scope for
-  now; `btop` is one click away.
+  now.
 
 ## Hardware support
 

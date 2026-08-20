@@ -10,13 +10,22 @@
     "bar-widget"
   ],
   "entryPoints": {
-    "barWidget": "Widget.qml"
+    "barWidget": "Panel.qml"
   },
   "barWidget": {
     "displayName": "System Monitor",
-    "description": "CPU, RAM, temperature, GPU, network and disk readings in the bar; hover for full values, left-click for btop.",
+    "description": "CPU, RAM, temperature, GPU, network and disk readings in the bar; click for a panel with full values and per-metric switches.",
     "category": "System",
-    "aliases": ["sysmon", "system", "cpu", "ram", "gpu", "monitor", "stats", "temperature"],
+    "aliases": [
+      "sysmon",
+      "system",
+      "cpu",
+      "ram",
+      "gpu",
+      "monitor",
+      "stats",
+      "temperature"
+    ],
     "allowMultiple": false,
     "defaultSection": "right",
     "defaults": {
@@ -88,14 +97,20 @@
         "key": "ramDisplay",
         "type": "enum",
         "label": "Memory shown as",
-        "options": ["used", "percent"],
+        "options": [
+          "used",
+          "percent"
+        ],
         "defaultValue": "used"
       },
       {
         "key": "tempUnit",
         "type": "enum",
         "label": "Temperature unit",
-        "options": ["C", "F"],
+        "options": [
+          "C",
+          "F"
+        ],
         "defaultValue": "C"
       },
       {

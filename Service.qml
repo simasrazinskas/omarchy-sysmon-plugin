@@ -41,6 +41,10 @@ Item {
   property var _prevNet: null
   property double _prevNetMs: 0
 
+  // Which vendor backend won, so the panel can say what it is reading from —
+  // empty when no GPU could be read at all.
+  readonly property string gpuVendor: gpuController.available ? gpuController.vendor : ""
+
   readonly property var state: ({
     cpu: cpu,
     mem: mem,

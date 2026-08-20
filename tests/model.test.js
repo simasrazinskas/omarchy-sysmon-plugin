@@ -309,3 +309,63 @@ test("tooltip omits sections with no data rather than showing zeros", () => {
   assert.ok(!text.includes("GPU"))
   assert.ok(!text.includes("DISK"))
 })
+
+// ------------------------------------------------------------- panel + rows
+
+test("detailRows reports every reading regardless of which chips are on", () => {
+  // The bar is the summary; the panel shows everything the widget knows, so
+  // switching a chip off must not empty the panel row too.
+  const rows = Model.detailRows(fullState(), { showCpu: false, showGpu: false, showDisk: false })
+  const keys = rows.map(r => r.key)
+  assert.deepEqual(keys, ["cpu", "ram", "gpu", "vram", "net", "disk"])
+})
+
+test("detailRows omits a reading that genuinely has no data", () => {
+  const state = fullState()
+  state.gpu = null
+  state.net = null
+  const keys = Model.detailRows(state, {}).map(r => r.key)
+  assert.deepEqual(keys, ["cpu", "ram", "disk"])
+})
+
+test("detailRows carries full precision the bar chips round away", () => {
+  const cpu = Model.detailRows(fullState(), {}).find(r => r.key === "cpu")
+  // The chip renders "12%"; the panel keeps the tenth.
+  assert.match(cpu.value, /12\.4%/)
+})
+
+test("detailRows names the interface and mountpoint being measured", () => {
+  const rows = Model.detailRows(fullState(), {})
+  assert.match(rows.find(r => r.key === "net").value, /enp129s0/)
+  assert.match(rows.find(r => r.key === "disk").value, /\//)
+})
+
+test("detailRows is empty before the first samples land", () => {
+  assert.deepEqual(Model.detailRows({}, {}), [])
+  assert.deepEqual(Model.detailRows(null, null), [])
+})
+
+test("every panel toggle drives a chip the bar actually renders", () => {
+  // A toggle whose key buildChips ignores would be a dead switch in the panel.
+  const chipKeys = new Set(Model.buildChips(fullState(), {
+    showCpu: true, showRam: true, showCpuTemp: true, showGpu: true,
+    showGpuTemp: true, showVram: true, showNet: true, showDisk: true
+  }).map(c => c.key))
+  for (const toggle of Model.TOGGLES) {
+    const optionsOff = {}
+    for (const t of Model.TOGGLES) optionsOff[t.key] = true
+    optionsOff[toggle.key] = false
+    const withAll = Model.buildChips(fullState(), Object.fromEntries(Model.TOGGLES.map(t => [t.key, true])))
+    const withOne = Model.buildChips(fullState(), optionsOff)
+    assert.ok(withOne.length < withAll.length, `${toggle.key} changed nothing`)
+  }
+  assert.ok(chipKeys.size > 0)
+})
+
+test("panel toggle defaults match the manifest defaults", () => {
+  const manifest = require("../manifest.json")
+  for (const toggle of Model.TOGGLES) {
+    assert.equal(toggle.defaultValue, manifest.barWidget.defaults[toggle.key],
+      `${toggle.key} default disagrees with the manifest`)
+  }
+})
