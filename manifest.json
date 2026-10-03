@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "io.github.simasrazinskas.sysmon",
   "name": "System Monitor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Simas Razinskas",
   "license": "MIT",
-  "description": "Machine vitals in the Omarchy bar: CPU, RAM, temperatures, GPU, network throughput and disk usage, each toggleable.",
+  "description": "Live system dashboard with history, per-core usage, resource pressure and searchable processes.",
   "kinds": [
     "bar-widget"
   ],
@@ -14,7 +14,7 @@
   },
   "barWidget": {
     "displayName": "System Monitor",
-    "description": "CPU, RAM, temperature, GPU, network and disk readings in the bar; click for a panel with full values and per-metric switches.",
+    "description": "Compact bar readings with a tabbed dashboard for overview, resources, network, storage and processes.",
     "category": "System",
     "aliases": [
       "sysmon",
@@ -41,7 +41,9 @@
       "ramDisplay": "used",
       "tempUnit": "C",
       "networkInterface": "",
-      "diskMountpoint": ""
+      "diskMountpoint": "",
+      "historyRange": "1m",
+      "chartMetric": "cpu"
     },
     "schema": [
       {
@@ -135,6 +137,28 @@
         "label": "Disk mountpoint",
         "defaultValue": "",
         "description": "Leave blank for the root filesystem."
+      },
+      {
+        "key": "historyRange",
+        "type": "enum",
+        "label": "History window",
+        "options": [
+          "1m",
+          "5m",
+          "15m"
+        ],
+        "defaultValue": "1m"
+      },
+      {
+        "key": "chartMetric",
+        "type": "enum",
+        "label": "History chart metric",
+        "options": [
+          "cpu",
+          "ram",
+          "gpu"
+        ],
+        "defaultValue": "cpu"
       }
     ]
   }
