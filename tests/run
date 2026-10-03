@@ -5,6 +5,8 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 node --test "$root/tests"/*.test.js
 
+PYTHONDONTWRITEBYTECODE=1 python3 "$root/tests/processes_test.py"
+
 if command -v omarchy-plugin-validate >/dev/null 2>&1; then
   omarchy-plugin-validate "$root"
   echo "manifest: valid"

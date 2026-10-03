@@ -171,9 +171,9 @@ test("parseDefaultRouteIface names the device carrying the default route", () =>
     "enp129s0")
 })
 
-test("parseDefaultRouteIface takes the first route when several exist", () => {
+test("parseDefaultRouteIface prefers the lowest metric, regardless of output order", () => {
   const text = "default via 10.0.0.1 dev wlan0 metric 600\ndefault via 192.168.1.1 dev eth0 metric 100"
-  assert.equal(Model.parseDefaultRouteIface(text), "wlan0")
+  assert.equal(Model.parseDefaultRouteIface(text), "eth0")
 })
 
 test("parseDefaultRouteIface returns empty with no default route", () => {
@@ -229,13 +229,34 @@ function fullState() {
   }
 }
 
-test("every chip renders its value padded to a constant width", () => {
+test("chips carry the raw value plus the width to pin it to", () => {
   const chips = Model.buildChips(fullState(), {})
   const byKey = Object.fromEntries(chips.map(c => [c.key, c]))
-  assert.equal(byKey.cpu.value, " 12%")
-  assert.equal(byKey.cpuTemp.value, " 42°")
-  assert.equal(byKey.disk.value, " 23%")
-  assert.equal(byKey.ram.value, " 18G")
+  // Raw, so the widget can reserve the width in pixels and left-align inside
+  // it — padding here would put the slack between icon and value.
+  assert.equal(byKey.cpu.value, "12%")
+  assert.equal(byKey.cpuTemp.value, "42°")
+  assert.equal(byKey.disk.value, "23%")
+  assert.equal(byKey.ram.value, "18G")
+  for (const chip of chips) {
+    assert.ok(chip.width >= chip.value.length, `${chip.key} width too small for its value`)
+  }
+})
+
+test("barText pads trailing, keeping every value hard against its icon", () => {
+  const state = fullState()
+  state.cpu = 5
+  const text = Model.barText(state, { showCpu: true, showRam: false, showCpuTemp: false,
+    showGpu: false, showGpuTemp: false, showNet: false, showDisk: false })
+  // Icon, one space, then the digits — never icon, space, then blank cells.
+  assert.equal(text, Model.ICONS.cpu + " 5%  ")
+  assert.ok(!text.startsWith(Model.ICONS.cpu + "   "))
+})
+
+test("padRight pins width without displacing the value", () => {
+  assert.equal(Model.padRight("5%", 4), "5%  ")
+  assert.equal(Model.padRight("100%", 4), "100%")
+  assert.equal(Model.padRight("1000%", 4), "1000%")
 })
 
 test("a metric with no reading contributes no chip at all", () => {
@@ -402,4 +423,11 @@ test("panel toggle defaults match the manifest defaults", () => {
     assert.equal(toggle.defaultValue, manifest.barWidget.defaults[toggle.key],
       `${toggle.key} default disagrees with the manifest`)
   }
+})
+
+
+test("default-route selection skips linkdown and keeps the first equal metric", () => {
+  assert.equal(Model.parseDefaultRouteIface("default dev eth0 metric 10 linkdown\ndefault dev wlan0 metric 20\ndefault dev usb0 metric 20"), "wlan0")
+  assert.equal(Model.parseDefaultRouteIface("default via fe80::1 dev wlan0 proto ra metric 600"), "wlan0")
+  assert.equal(Model.parseDefaultRouteIface("10.0.0.0/8 dev eth0"), "")
 })

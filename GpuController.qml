@@ -66,4 +66,15 @@ Item {
     repeat: true
     onTriggered: root.refresh()
   }
+  // Retry unavailable devices so a driver reset or eGPU reconnect can recover.
+  Timer {
+    interval: 30000
+    running: true
+    repeat: true
+    onTriggered: {
+      for (var i = 0; i < root.backends.length; i++)
+        if (!root.backends[i].available) root.backends[i].refresh()
+    }
+  }
+
 }

@@ -2,15 +2,33 @@ import QtQuick
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
+import "components"
 
-// System Monitor bar widget: machine vitals in the bar, detail panel on click.
-// The panel is both the readout and the control surface — every chip can be
-// switched on or off there, writing the same settings keys the plugin settings
-// screen uses, so the two can never drift apart.
+// Native dashboard host. Bar values keep their stable, compact layout.
 Panel {
   id: root
   moduleName: "io.github.simasrazinskas.sysmon"
   ipcTarget: "io.github.simasrazinskas.sysmon"
+
+  property int tab: 0
+  property bool settingsOpen: false
+  readonly property var tabs: ['Overview', 'Resources', 'Activity', 'Processes']
+  readonly property var dataService: service
+  readonly property var panelTheme: theme
+  readonly property int historySeconds: ({'1m': 60, '5m': 300, '15m': 900})[String(setting('historyRange', '1m'))] || 60
+  readonly property string chartMetric: ['cpu', 'ram', 'gpu'].indexOf(String(setting('chartMetric', 'cpu'))) >= 0 ? String(setting('chartMetric', 'cpu')) : 'cpu'
+  readonly property bool editorFocused: dashboard.view && dashboard.view.editorFocused === true
+  function selectTab(index) { settingsOpen = false; tab = index; focusPanel() }
+  function focusPanel() { keyCatcher.forceActiveFocus() }
+  function stepTab(direction) { selectTab((tab + direction + tabs.length) % tabs.length) }
+
+  Theme {
+    id: theme
+    foreground: root.foreground
+    accent: Color.accent
+    urgent: root.bar ? root.bar.urgent : Color.urgent
+    fontFamily: root.fontFamily
+  }
 
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
@@ -31,11 +49,11 @@ Panel {
     tempUnit: String(setting("tempUnit", "C")).toUpperCase() === "F" ? "F" : "C"
   })
 
+  readonly property var chips: Model.buildChips(service.state, options)
   readonly property string label: root.vertical
     ? Model.barTextVertical(service.state, options)
     : Model.barText(service.state, options)
 
-  readonly property var rows: Model.panelRows(service.state, options)
   readonly property bool vertical: bar ? bar.vertical : false
 
   // Mirrors the clock's format cycling and the t212 widget: apply locally for
@@ -69,17 +87,7 @@ Panel {
   Service {
     id: service
     settings: root.settings
-  }
-
-  // Nothing to show until the first samples land — CPU needs two ticks for a
-  // delta — and nothing to show if every chip is off. But the button has to
-  // stay clickable in that second case, or switching everything off would
-  // remove the only way back to the panel that turns them on again.
-  readonly property bool everythingOff: {
-    for (var i = 0; i < Model.TOGGLES.length; i++) {
-      if (options[Model.TOGGLES[i].key]) return false
-    }
-    return true
+    processesActive: root.opened && !root.settingsOpen && root.tab === 3
   }
 
   implicitWidth: button.implicitWidth
@@ -92,22 +100,80 @@ Panel {
     labelVisible: false
     hasVisualContent: true
     fixedWidth: root.vertical ? -1 : barLabel.implicitWidth + scaledHorizontalMargin * 2
-    fixedHeight: root.vertical ? barLabel.implicitHeight + scaledVerticalPadding * 2 : -1
+    fixedHeight: root.vertical ? verticalLabel.implicitHeight + scaledVerticalPadding * 2 : -1
     tooltipText: Model.tooltipText(service.state, root.options)
     useActiveColor: false
     onPressed: function(buttonCode) { root.toggle() }
 
+    // Measures the bar font so a value can reserve a whole number of character
+    // widths. Pinning in pixels is what lets the icon sit a few pixels from its
+    // value instead of a full monospace cell away.
+    FontMetrics {
+      id: metrics
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+    }
+
+    // Vertical bars have no room for icons and stack bare values instead.
     Text {
-      id: barLabel
+      id: verticalLabel
       anchors.centerIn: parent
-      // A widget with every chip switched off still needs a hit target, so it
-      // falls back to its own icon rather than collapsing to nothing.
-      text: root.label !== "" ? root.label : (root.everythingOff ? Model.ICONS.cpu : "")
+      visible: root.vertical
+      text: root.label || Model.ICONS.cpu
       color: root.foreground
       font.family: root.fontFamily
       font.pixelSize: Style.font.body
       horizontalAlignment: Text.AlignHCenter
       renderType: Text.NativeRendering
+    }
+
+    Row {
+      id: barLabel
+      anchors.centerIn: parent
+      visible: !root.vertical
+      spacing: Style.space(7)
+
+      // Keep a hit target while readings initialize or every chip is off.
+      Text {
+        visible: root.chips.length === 0
+        text: Model.ICONS.cpu
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        renderType: Text.NativeRendering
+      }
+
+      Repeater {
+        model: root.chips
+
+        Row {
+          // Keep icons close to their pinned-width readings.
+          spacing: Style.space(2)
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: modelData.icon
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+            renderType: Text.NativeRendering
+          }
+
+          Text {
+            anchors.verticalCenter: parent.verticalCenter
+            // Reserve the pinned width in pixels and left-align inside it, so
+            // the value always starts hard against its icon and the slack ends
+            // up between chips instead of inside one.
+            width: Math.ceil(metrics.advanceWidth("0") * modelData.width)
+            horizontalAlignment: Text.AlignLeft
+            text: modelData.value
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+            renderType: Text.NativeRendering
+          }
+        }
+      }
     }
   }
 
@@ -118,96 +184,35 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    contentWidth: panel.fittedContentWidth(Style.space(360))
-    contentHeight: panel.fittedContentHeight(content.implicitHeight, Style.space(640))
+    contentWidth: panel.fittedContentWidth(Style.space(540))
+    contentHeight: panel.fittedContentHeight(Style.space(710), Style.space(750))
 
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: root.editorFocused
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
-
-      // A plain Column rather than a ColumnLayout: implicitHeight is then the
-      // simple sum of the children, which is what the popup sizes itself from.
-      Column {
-        id: content
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        spacing: Style.space(8)
-
-        Row {
-          width: parent.width
-          spacing: Style.space(6)
-
-          Text {
-            anchors.baseline: vendorLabel.baseline
-            text: "System Monitor"
-            color: root.foreground
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.subtitle
-            renderType: Text.NativeRendering
-          }
-
-          // The vendor sits on the title's line rather than under it: one row
-          // saved is one row the switches below do not lose.
-          Text {
-            id: vendorLabel
-            text: service.gpuVendor !== "" ? "· " + service.gpuVendor.toUpperCase() : "· no GPU"
-            color: root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            renderType: Text.NativeRendering
-          }
+      onMoveRequested: function(dx, dy) {
+        if (dx) root.stepTab(dx)
+        else if (dashboard.view && typeof dashboard.view.move === 'function') dashboard.view.move(dy)
+      }
+      onActivateRequested: if (dashboard.view && typeof dashboard.view.togglePause === 'function') dashboard.view.togglePause()
+      onTextKey: function(text) {
+        if (text >= '1' && text <= '4') root.selectTab(Number(text) - 1)
+        else if (text === ',') root.settingsOpen = !root.settingsOpen
+        else if (text === '/') {
+          root.selectTab(3)
+          Qt.callLater(function() { if (dashboard.view) dashboard.view.focusSearch() })
         }
+      }
 
-        PanelSeparator { width: parent.width }
-
-        // Reading and switch on one line each. Every metric is listed whether
-        // or not it is in the bar, so the panel is the full readout as well as
-        // the control surface.
-        Repeater {
-          model: root.rows
-
-          Item {
-            width: content.width
-            implicitHeight: Math.max(toggleSwitch.implicitHeight, rowLabel.implicitHeight)
-
-            Text {
-              id: rowLabel
-              anchors.left: parent.left
-              anchors.verticalCenter: parent.verticalCenter
-              text: modelData.label
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.bodySmall
-              renderType: Text.NativeRendering
-            }
-
-            Text {
-              id: rowValue
-              anchors.right: toggleSwitch.left
-              anchors.rightMargin: Style.space(10)
-              anchors.verticalCenter: parent.verticalCenter
-              text: modelData.value
-              // A metric with no reading — no GPU, no sensor — dims rather
-              // than disappearing, so its switch still has a label.
-              color: modelData.available ? root.foreground : root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.body
-              renderType: Text.NativeRendering
-            }
-
-            ToggleSwitch {
-              id: toggleSwitch
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              checked: modelData.enabled
-              foreground: root.foreground
-              onToggled: root.persistSetting(modelData.key, !modelData.enabled)
-            }
-          }
-        }
+      Dashboard {
+        id: dashboard
+        anchors.fill: parent
+        host: root
+        service: root.dataService
+        theme: root.panelTheme
       }
     }
   }

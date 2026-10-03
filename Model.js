@@ -20,14 +20,26 @@ var ICONS = {
 // there is nowhere to persist a user ordering — only which chips are on.
 var CHIP_ORDER = ["cpu", "ram", "cpuTemp", "gpu", "gpuTemp", "vram", "net", "disk"]
 
-// Every value is padded to a constant width so a reading that grows a digit
-// (9% -> 10%, 99C -> 100C) cannot shove the rest of the bar sideways. The
-// bar font is monospace, so padding with spaces is enough to pin the width.
+// Width each value is pinned to, in characters, so a reading that grows a
+// digit (9% -> 10%, 99° -> 100°) cannot shove the rest of the bar sideways.
+// The widget reserves this many character widths in pixels; barText() pads
+// with spaces to the same width for its plain-text form.
 var WIDTHS = { percent: 4, temp: 4, size: 4, rate: 4 }
 
 function padLeft(value, width) {
   var text = String(value)
   while (text.length < width) text = " " + text
+  return text
+}
+
+// Values are padded on the right, not the left. Right-aligning them would put
+// the slack between the icon and its own number — "5%" would sit three cells
+// from its icon while "100%" sat one — which reads as a wobbling gap. Padding
+// trailing instead keeps every value hard against its icon and moves the slack
+// out to the chip's edge, where it separates chips rather than splitting one.
+function padRight(value, width) {
+  var text = String(value)
+  while (text.length < width) text += " "
   return text
 }
 
@@ -190,16 +202,18 @@ function parseDiskPercent(text) {
   return null
 }
 
-// `ip route show default` names the interface carrying the default route,
-// which is the one whose throughput people mean. Picking the first line makes
-// the lowest-metric route win when several exist.
+// Pick the lowest metric among default routes, retaining order on ties.
 function parseDefaultRouteIface(text) {
   var lines = String(text || "").split("\n")
+  var selected = "", lowest = Infinity
   for (var i = 0; i < lines.length; i++) {
+    if (!/^default\s/.test(lines[i].trim()) || /\blinkdown\b/.test(lines[i])) continue
     var match = lines[i].match(/\bdev\s+(\S+)/)
-    if (match) return match[1]
+    var metric = lines[i].match(/\bmetric\s+(\d+)/)
+    var priority = metric ? Number(metric[1]) : 0
+    if (match && priority < lowest) { selected = match[1]; lowest = priority }
   }
-  return ""
+  return selected
 }
 
 // --------------------------------------------------------------- formatting
@@ -287,25 +301,28 @@ function buildChips(state, options) {
     } else if (key === "net" && enabled("showNet") && data.net) {
       // Down and up are separate chips so a vertical bar can stack them; laid
       // out horizontally they sit next to each other and read as one pair.
-      chips.push({ key: "netDown", icon: ICONS.netDown, value: padLeft(formatBytes(data.net.down), WIDTHS.rate) })
-      chips.push({ key: "netUp", icon: ICONS.netUp, value: padLeft(formatBytes(data.net.up), WIDTHS.rate) })
+      chips.push({ key: "netDown", icon: ICONS.netDown, value: formatBytes(data.net.down), width: WIDTHS.rate })
+      chips.push({ key: "netUp", icon: ICONS.netUp, value: formatBytes(data.net.up), width: WIDTHS.rate })
       continue
     } else if (key === "disk" && enabled("showDisk") && data.disk !== null && data.disk !== undefined) {
       icon = ICONS.disk
       text = formatPercent(data.disk)
     }
 
-    if (text !== "") chips.push({ key: key, icon: icon, value: padLeft(text, width) })
+    if (text !== "") chips.push({ key: key, icon: icon, value: text, width: width })
   }
   return chips
 }
 
-// Horizontal bars get icon + value per chip, two spaces between chips.
+// Plain-text rendering of the bar, used by the tests and by anything that
+// wants one string. The widget itself lays the same chips out as separate
+// items so the icon-to-value gap can be set in pixels rather than in whole
+// monospace cells, which is wider than it should be.
 function barText(state, options) {
   var chips = buildChips(state, options)
   var parts = []
-  for (var i = 0; i < chips.length; i++) parts.push(chips[i].icon + " " + chips[i].value)
-  return parts.join("  ")
+  for (var i = 0; i < chips.length; i++) parts.push(chips[i].icon + " " + padRight(chips[i].value, chips[i].width))
+  return parts.join(" ")
 }
 
 // A vertical bar is 28px wide — an icon plus a four-character value does not
@@ -314,7 +331,7 @@ function barText(state, options) {
 function barTextVertical(state, options) {
   var chips = buildChips(state, options)
   var parts = []
-  for (var i = 0; i < chips.length; i++) parts.push(chips[i].value.trim())
+  for (var i = 0; i < chips.length; i++) parts.push(chips[i].value)
   return parts.join("\n")
 }
 
@@ -439,6 +456,7 @@ if (typeof module !== "undefined") {
     CHIP_ORDER: CHIP_ORDER,
     WIDTHS: WIDTHS,
     padLeft: padLeft,
+    padRight: padRight,
     parseCpuTotals: parseCpuTotals,
     cpuPercent: cpuPercent,
     parseMeminfo: parseMeminfo,
