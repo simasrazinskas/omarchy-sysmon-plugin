@@ -291,7 +291,7 @@ test("ramDisplay switches memory between absolute and percent", () => {
 
 test("chips keep CHIP_ORDER regardless of which ones are on", () => {
   const keys = Model.buildChips(fullState(), { showVram: true }).map(c => c.key)
-  assert.deepEqual(keys, ["cpu", "ram", "cpuTemp", "gpu", "gpuTemp", "vram", "netDown", "netUp", "disk"])
+  assert.deepEqual(keys, ["cpu", "cpuTemp", "ram", "gpu", "gpuTemp", "vram", "netDown", "netUp", "disk"])
 })
 
 test("network splits into two chips so a vertical bar can stack them", () => {
@@ -306,7 +306,7 @@ test("barText renders nothing when every reading is missing", () => {
 
 test("vertical bars drop the icons and stack the values", () => {
   const vertical = Model.barTextVertical(fullState(), { showNet: false, showDisk: false })
-  assert.deepEqual(vertical.split("\n"), ["12%", "18G", "42°", "64%", "71°"])
+  assert.deepEqual(vertical.split("\n"), ["12%", "42°", "18G", "64%", "71°"])
   // 28px of bar leaves no room for an icon next to a four-character reading.
   for (const line of vertical.split("\n")) assert.ok(line.length <= 4)
 })

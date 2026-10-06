@@ -53,15 +53,15 @@
         "defaultValue": true
       },
       {
-        "key": "showRam",
-        "type": "boolean",
-        "label": "Show memory",
-        "defaultValue": true
-      },
-      {
         "key": "showCpuTemp",
         "type": "boolean",
         "label": "Show CPU temperature",
+        "defaultValue": true
+      },
+      {
+        "key": "showRam",
+        "type": "boolean",
+        "label": "Show memory",
         "defaultValue": true
       },
       {

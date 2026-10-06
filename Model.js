@@ -18,7 +18,7 @@ var ICONS = {
 // Chips always render in this order. Per-widget settings live in the bar's
 // shell.json layout entry, and the manifest schema has no array type, so
 // there is nowhere to persist a user ordering — only which chips are on.
-var CHIP_ORDER = ["cpu", "ram", "cpuTemp", "gpu", "gpuTemp", "vram", "net", "disk"]
+var CHIP_ORDER = ["cpu", "cpuTemp", "ram", "gpu", "gpuTemp", "vram", "net", "disk"]
 
 // Width each value is pinned to, in characters, so a reading that grows a
 // digit (9% -> 10%, 99° -> 100°) cannot shove the rest of the bar sideways.
@@ -441,8 +441,8 @@ function panelRows(state, options) {
 // settings screen drive exactly the same values.
 var TOGGLES = [
   { key: "showCpu", label: "CPU usage", defaultValue: true },
-  { key: "showRam", label: "Memory", defaultValue: true },
   { key: "showCpuTemp", label: "CPU temperature", defaultValue: true },
+  { key: "showRam", label: "Memory", defaultValue: true },
   { key: "showGpu", label: "GPU usage", defaultValue: true },
   { key: "showGpuTemp", label: "GPU temperature", defaultValue: true },
   { key: "showVram", label: "VRAM used", defaultValue: false },

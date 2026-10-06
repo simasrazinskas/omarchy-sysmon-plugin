@@ -211,23 +211,23 @@ Item {
   // hwmon numbering is assigned in probe order and is not stable across boots,
   // so the CPU sensor has to be found by name rather than hardcoded. Prefer a
   // package-wide label (Intel's "Package id 0", AMD's Tctl/Tdie) over a single
-  // core, which would report whichever core happens to be busy.
+  // core, which would report whichever core happens to be busy. Drivers are
+  // tried in priority order rather than hwmon order: acpitz is often a static
+  // ACPI zone (a constant ~28°C) and must only be used when nothing else exists.
   Process {
     id: cpuTempProbe
     command: ["bash", "-c",
-      "for hw in /sys/class/hwmon/hwmon*; do\n"
-      + "  name=$(cat \"$hw/name\" 2>/dev/null)\n"
-      + "  case \"$name\" in\n"
-      + "    coretemp|k10temp|zenpower|cpu_thermal|acpitz) ;;\n"
-      + "    *) continue ;;\n"
-      + "  esac\n"
-      + "  for label in \"$hw\"/temp*_label; do\n"
-      + "    [ -r \"$label\" ] || continue\n"
-      + "    case \"$(cat \"$label\" 2>/dev/null)\" in\n"
-      + "      Package\\ id*|Tctl|Tdie|CPU*) echo \"${label%_label}_input\"; exit 0 ;;\n"
-      + "    esac\n"
+      "for driver in coretemp k10temp zenpower cpu_thermal acpitz; do\n"
+      + "  for hw in /sys/class/hwmon/hwmon*; do\n"
+      + "    [ \"$(cat \"$hw/name\" 2>/dev/null)\" = \"$driver\" ] || continue\n"
+      + "    for label in \"$hw\"/temp*_label; do\n"
+      + "      [ -r \"$label\" ] || continue\n"
+      + "      case \"$(cat \"$label\" 2>/dev/null)\" in\n"
+      + "        Package\\ id*|Tctl|Tdie|CPU*) echo \"${label%_label}_input\"; exit 0 ;;\n"
+      + "      esac\n"
+      + "    done\n"
+      + "    [ -r \"$hw/temp1_input\" ] && { echo \"$hw/temp1_input\"; exit 0; }\n"
       + "  done\n"
-      + "  [ -r \"$hw/temp1_input\" ] && { echo \"$hw/temp1_input\"; exit 0; }\n"
       + "done\n"
       + "exit 127\n"]
     stdout: StdioCollector {
