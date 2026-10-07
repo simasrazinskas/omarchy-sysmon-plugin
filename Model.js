@@ -26,6 +26,92 @@ var CHIP_ORDER = ["cpu", "cpuTemp", "ram", "gpu", "gpuTemp", "vram", "net", "dis
 // with spaces to the same width for its plain-text form.
 var WIDTHS = { percent: 4, temp: 4, size: 4, rate: 4 }
 
+// Bar styles, in the order a right-click cycles through them. `layout` says
+// what each chip draws and `colors` how it is coloured, so the bar and the
+// settings panel read the same table and a new style is one line here.
+//   layout: "full" icon + value, "values" value only, "minimal" one icon
+//   colors: "plain" bar foreground, "alert" amber/red only when a reading is
+//           high, "tint" a distinct hue per metric, "grouped" one hue family
+//           per device so related readings read as a pair
+var BAR_MODES = [
+  { key: "full", label: "Icons + values", layout: "full", colors: "plain" },
+  { key: "values", label: "Values only", layout: "values", colors: "plain" },
+  { key: "minimal", label: "Minimal", layout: "minimal", colors: "plain" },
+  { key: "alert", label: "Alert colours", layout: "full", colors: "alert" },
+  { key: "tint", label: "Tinted", layout: "full", colors: "tint" },
+  { key: "grouped", label: "Grouped tint", layout: "full", colors: "grouped" },
+  // Once colour identifies each metric the icons are redundant.
+  { key: "groupedValues", label: "Grouped tint, values only", layout: "values", colors: "grouped" }
+]
+
+// Hues are mixed into the bar foreground at TINT_STRENGTH rather than used
+// raw, so a tint stays a hint on both light and dark themes instead of
+// replacing the theme's text colour.
+var TINT_STRENGTH = 0.4
+
+// One distinct hue per metric.
+var TINTS = {
+  cpu: "#4c9fff", // blue
+  cpuTemp: "#ff7b54", // coral
+  ram: "#5cc96b", // green
+  gpu: "#a77bff", // violet
+  gpuTemp: "#ff5f8f", // rose
+  vram: "#e07bff", // magenta
+  netDown: "#2ec4c4", // teal
+  netUp: "#ffd166", // yellow
+  disk: "#d4a373" // sand
+}
+
+// One hue family per device: usage takes the bright shade, temperature the
+// deeper one, so CPU usage and CPU temperature read as the same part.
+var GROUP_TINTS = {
+  cpu: "#3d9bff", // azure
+  cpuTemp: "#0077be", // ocean blue
+  ram: "#59c26a", // leaf green
+  gpu: "#9b6bff", // violet
+  gpuTemp: "#7a3fb8", // plum
+  vram: "#c77dff", // orchid
+  netDown: "#20c5c5", // teal
+  netUp: "#7fd8be", // seafoam
+  disk: "#f2a33a" // amber
+}
+
+var ALERT_WARN = "#f0a030"
+
+// Usage and temperature (°C) thresholds for the alert style: [warn, critical].
+var LIMITS = { percent: [75, 90], ram: [80, 92], temp: [75, 90], disk: [85, 95] }
+
+function barMode(value) {
+  for (var i = 0; i < BAR_MODES.length; i++) if (BAR_MODES[i].key === value) return BAR_MODES[i]
+  return BAR_MODES[0]
+}
+
+function nextBarMode(value) {
+  var current = barMode(value)
+  return BAR_MODES[(BAR_MODES.indexOf(current) + 1) % BAR_MODES.length].key
+}
+
+// 0 normal, 1 warning, 2 critical. Missing readings are never alarming.
+function level(value, limits) {
+  if (value === null || value === undefined || !isFinite(value)) return 0
+  return value >= limits[1] ? 2 : value >= limits[0] ? 1 : 0
+}
+
+// How a chip should be coloured in a style: null keeps the bar foreground,
+// otherwise a hue and how much of it to mix in.
+function chipTint(chip, mode) {
+  var colors = barMode(mode).colors
+  if (colors === "tint" || colors === "grouped") {
+    var hue = (colors === "tint" ? TINTS : GROUP_TINTS)[chip.key]
+    return hue ? { hue: hue, strength: TINT_STRENGTH } : null
+  }
+  if (colors === "alert") {
+    if (chip.level === 2) return { hue: "urgent", strength: 1 }
+    if (chip.level === 1) return { hue: ALERT_WARN, strength: 0.8 }
+  }
+  return null
+}
+
 function padLeft(value, width) {
   var text = String(value)
   while (text.length < width) text = " " + text
@@ -271,12 +357,15 @@ function buildChips(state, options) {
     var text = ""
     var icon = ""
     var width = WIDTHS.percent
+    var alert = 0
 
     if (key === "cpu" && enabled("showCpu") && data.cpu !== null && data.cpu !== undefined) {
       icon = ICONS.cpu
       text = formatPercent(data.cpu)
+      alert = level(data.cpu, LIMITS.percent)
     } else if (key === "ram" && enabled("showRam") && data.mem) {
       icon = ICONS.ram
+      alert = level(data.mem.percent, LIMITS.ram)
       if (String(opts.ramDisplay || "used") === "percent") {
         text = formatPercent(data.mem.percent)
       } else {
@@ -287,29 +376,34 @@ function buildChips(state, options) {
       icon = ICONS.temp
       text = formatTemp(data.cpuTemp, tempUnit)
       width = WIDTHS.temp
+      alert = level(data.cpuTemp, LIMITS.temp)
     } else if (key === "gpu" && enabled("showGpu") && data.gpu && data.gpu.util !== null) {
       icon = ICONS.gpu
       text = formatPercent(data.gpu.util)
+      alert = level(data.gpu.util, LIMITS.percent)
     } else if (key === "gpuTemp" && enabled("showGpuTemp") && data.gpu && data.gpu.temp !== null && data.gpu.temp !== undefined) {
       icon = ICONS.temp
       text = formatTemp(data.gpu.temp, tempUnit)
       width = WIDTHS.temp
+      alert = level(data.gpu.temp, LIMITS.temp)
     } else if (key === "vram" && enabled("showVram", false) && data.gpu && data.gpu.vramUsed !== null && data.gpu.vramUsed !== undefined) {
       icon = ICONS.vram
       text = formatBytes(data.gpu.vramUsed)
       width = WIDTHS.size
+      if (data.gpu.vramTotal) alert = level(data.gpu.vramUsed / data.gpu.vramTotal * 100, LIMITS.ram)
     } else if (key === "net" && enabled("showNet") && data.net) {
       // Down and up are separate chips so a vertical bar can stack them; laid
       // out horizontally they sit next to each other and read as one pair.
-      chips.push({ key: "netDown", icon: ICONS.netDown, value: formatBytes(data.net.down), width: WIDTHS.rate })
-      chips.push({ key: "netUp", icon: ICONS.netUp, value: formatBytes(data.net.up), width: WIDTHS.rate })
+      chips.push({ key: "netDown", icon: ICONS.netDown, value: formatBytes(data.net.down), width: WIDTHS.rate, level: 0 })
+      chips.push({ key: "netUp", icon: ICONS.netUp, value: formatBytes(data.net.up), width: WIDTHS.rate, level: 0 })
       continue
     } else if (key === "disk" && enabled("showDisk") && data.disk !== null && data.disk !== undefined) {
       icon = ICONS.disk
       text = formatPercent(data.disk)
+      alert = level(data.disk, LIMITS.disk)
     }
 
-    if (text !== "") chips.push({ key: key, icon: icon, value: text, width: width })
+    if (text !== "") chips.push({ key: key, icon: icon, value: text, width: width, level: alert })
   }
   return chips
 }
@@ -320,8 +414,13 @@ function buildChips(state, options) {
 // monospace cells, which is wider than it should be.
 function barText(state, options) {
   var chips = buildChips(state, options)
+  var layout = barMode(options && options.barMode).layout
+  if (layout === "minimal") return chips.length ? ICONS.cpu : ""
   var parts = []
-  for (var i = 0; i < chips.length; i++) parts.push(chips[i].icon + " " + padRight(chips[i].value, chips[i].width))
+  for (var i = 0; i < chips.length; i++) {
+    var value = padRight(chips[i].value, chips[i].width)
+    parts.push(layout === "values" ? value : chips[i].icon + " " + value)
+  }
   return parts.join(" ")
 }
 
@@ -330,6 +429,7 @@ function barText(state, options) {
 // the part worth keeping, and the tooltip still names every one of them.
 function barTextVertical(state, options) {
   var chips = buildChips(state, options)
+  if (barMode(options && options.barMode).layout === "minimal") return chips.length ? ICONS.cpu : ""
   var parts = []
   for (var i = 0; i < chips.length; i++) parts.push(chips[i].value)
   return parts.join("\n")
@@ -455,6 +555,12 @@ if (typeof module !== "undefined") {
     ICONS: ICONS,
     CHIP_ORDER: CHIP_ORDER,
     WIDTHS: WIDTHS,
+    BAR_MODES: BAR_MODES,
+    TINTS: TINTS,
+    GROUP_TINTS: GROUP_TINTS,
+    barMode: barMode,
+    nextBarMode: nextBarMode,
+    chipTint: chipTint,
     padLeft: padLeft,
     padRight: padRight,
     parseCpuTotals: parseCpuTotals,
