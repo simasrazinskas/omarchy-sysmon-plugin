@@ -10,30 +10,12 @@ Scroller {
   required property var theme
   required property var host
   spacing: Style.space(10)
-  readonly property var health: Metrics.health(service.state, service.pressures)
   readonly property int range: host.historySeconds
   readonly property var cpuSeries: Metrics.series(service.history, 'cpu', range, service.lastSample)
   readonly property var chartSeries: Metrics.series(service.history, host.chartMetric, range, service.lastSample)
   readonly property var summary: Metrics.stats(chartSeries)
   function move(dy) { scrollBy(dy * Style.space(48)) }
 
-  Item {
-    width: parent.width; implicitHeight: hero.implicitHeight
-    Column {
-      id: hero; width: parent.width; spacing: Style.space(5)
-      Caption { theme: root.theme; text: "AT A GLANCE" }
-      Label {
-        theme: root.theme; width: parent.width
-        text: root.health.title; font.pixelSize: Style.font.display; font.bold: true
-        color: root.health.issues.length ? root.theme.urgent : root.theme.foreground
-      }
-      Label {
-        theme: root.theme; width: parent.width; wrapMode: Text.WordWrap
-        text: root.health.issues.length ? root.health.issues.join(' · ') : "No active resource warnings."
-        color: root.theme.dim
-      }
-    }
-  }
   Row {
     width: parent.width; spacing: Style.space(6)
     Repeater {

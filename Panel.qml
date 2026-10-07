@@ -46,13 +46,25 @@ Panel {
     showNet: setting("showNet", true) === true,
     showDisk: setting("showDisk", true) === true,
     ramDisplay: String(setting("ramDisplay", "used")),
-    tempUnit: String(setting("tempUnit", "C")).toUpperCase() === "F" ? "F" : "C"
+    tempUnit: String(setting("tempUnit", "C")).toUpperCase() === "F" ? "F" : "C",
+    barMode: Model.barMode(String(setting("barMode", "full"))).key
   })
 
   readonly property var chips: Model.buildChips(service.state, options)
-  readonly property string label: root.vertical
-    ? Model.barTextVertical(service.state, options)
-    : Model.barText(service.state, options)
+  readonly property var mode: Model.barMode(options.barMode)
+  // Minimal collapses the bar to one icon; vertical bars never show icons.
+  readonly property bool showIcons: mode.layout === "full" && !vertical
+  readonly property bool minimal: mode.layout === "minimal" || chips.length === 0
+
+  // Right-click steps through Model.BAR_MODES.
+  function cycleBarMode() { persistSetting("barMode", Model.nextBarMode(options.barMode)) }
+
+  function chipColor(chip) {
+    var tint = Model.chipTint(chip, options.barMode)
+    if (!tint) return root.foreground
+    var hue = tint.hue === "urgent" ? theme.urgent : tint.hue
+    return Qt.tint(root.foreground, Qt.alpha(hue, tint.strength))
+  }
 
   readonly property bool vertical: bar ? bar.vertical : false
 
@@ -102,8 +114,13 @@ Panel {
     fixedWidth: root.vertical ? -1 : barLabel.implicitWidth + scaledHorizontalMargin * 2
     fixedHeight: root.vertical ? verticalLabel.implicitHeight + scaledVerticalPadding * 2 : -1
     tooltipText: Model.tooltipText(service.state, root.options)
+      + (Model.tooltipText(service.state, root.options) ? "\n\n" : "")
+      + "Style: " + root.mode.label + "  ·  right-click to change"
     useActiveColor: false
-    onPressed: function(buttonCode) { root.toggle() }
+    onPressed: function(buttonCode) {
+      if (buttonCode === Qt.RightButton) root.cycleBarMode()
+      else root.toggle()
+    }
 
     // Measures the bar font so a value can reserve a whole number of character
     // widths. Pinning in pixels is what lets the icon sit a few pixels from its
@@ -115,27 +132,14 @@ Panel {
     }
 
     // Vertical bars have no room for icons and stack bare values instead.
-    Text {
+    Column {
       id: verticalLabel
       anchors.centerIn: parent
       visible: root.vertical
-      text: root.label || Model.ICONS.cpu
-      color: root.foreground
-      font.family: root.fontFamily
-      font.pixelSize: Style.font.body
-      horizontalAlignment: Text.AlignHCenter
-      renderType: Text.NativeRendering
-    }
 
-    Row {
-      id: barLabel
-      anchors.centerIn: parent
-      visible: !root.vertical
-      spacing: Style.space(7)
-
-      // Keep a hit target while readings initialize or every chip is off.
       Text {
-        visible: root.chips.length === 0
+        visible: root.minimal
+        anchors.horizontalCenter: parent.horizontalCenter
         text: Model.ICONS.cpu
         color: root.foreground
         font.family: root.fontFamily
@@ -144,7 +148,39 @@ Panel {
       }
 
       Repeater {
-        model: root.chips
+        model: root.minimal ? [] : root.chips
+
+        Text {
+          anchors.horizontalCenter: parent.horizontalCenter
+          text: modelData.value
+          color: root.chipColor(modelData)
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.body
+          horizontalAlignment: Text.AlignHCenter
+          renderType: Text.NativeRendering
+        }
+      }
+    }
+
+    Row {
+      id: barLabel
+      anchors.centerIn: parent
+      visible: !root.vertical
+      spacing: Style.space(7)
+
+      // Keeps a hit target in Minimal, while readings initialize, or when
+      // every chip is off.
+      Text {
+        visible: root.minimal
+        text: Model.ICONS.cpu
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        renderType: Text.NativeRendering
+      }
+
+      Repeater {
+        model: root.minimal ? [] : root.chips
 
         Row {
           // Keep icons close to their pinned-width readings.
@@ -152,8 +188,9 @@ Panel {
 
           Text {
             anchors.verticalCenter: parent.verticalCenter
+            visible: root.showIcons
             text: modelData.icon
-            color: root.foreground
+            color: root.chipColor(modelData)
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
             renderType: Text.NativeRendering
@@ -167,7 +204,7 @@ Panel {
             width: Math.ceil(metrics.advanceWidth("0") * modelData.width)
             horizontalAlignment: Text.AlignLeft
             text: modelData.value
-            color: root.foreground
+            color: root.chipColor(modelData)
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
             renderType: Text.NativeRendering

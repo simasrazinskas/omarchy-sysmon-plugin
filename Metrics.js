@@ -82,16 +82,4 @@ function filterProcesses(rows, query, sort) {
     return (number(b[key]) ? b[key] : -1) - (number(a[key]) ? a[key] : -1) || a.pid - b.pid
   })
 }
-function health(state, pressures) {
-  var issues = [], s = state || {}, p = pressures || {}
-  if (number(s.cpuTemp) && s.cpuTemp >= 90) issues.push('CPU temperature is high')
-  if (s.gpu && number(s.gpu.temp) && s.gpu.temp >= 85) issues.push('GPU temperature is high')
-  if (s.mem && s.mem.percent >= 90) issues.push('Memory is running low')
-  if (number(s.disk) && s.disk >= 90) issues.push('Storage is nearly full')
-  if (p.memory && p.memory.avg10 >= 10) issues.push('Tasks are waiting for memory')
-  if (p.io && p.io.avg10 >= 10) issues.push('Tasks are waiting for I/O')
-  if (p.cpu && p.cpu.avg10 >= 20) issues.push('CPU demand exceeds capacity')
-  if (!issues.length && number(s.cpu) && s.cpu >= 90) issues.push('CPU is working hard')
-  return { title: issues.length ? 'Needs attention' : number(s.cpu) && s.mem ? 'Running smoothly' : 'Collecting readings', issues: issues }
-}
-if (typeof module !== 'undefined') module.exports = {number:number,percent:percent,bytes:bytes,duration:duration,memory:memory,cores:cores,coreUsage:coreUsage,pressure:pressure,load:load,disk:disk,append:append,series:series,stats:stats,processRates:processRates,filterProcesses:filterProcesses,health:health}
+if (typeof module !== 'undefined') module.exports = {number:number,percent:percent,bytes:bytes,duration:duration,memory:memory,cores:cores,coreUsage:coreUsage,pressure:pressure,load:load,disk:disk,append:append,series:series,stats:stats,processRates:processRates,filterProcesses:filterProcesses}

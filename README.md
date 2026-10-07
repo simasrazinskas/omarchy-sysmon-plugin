@@ -9,8 +9,8 @@ what changed, and which processes are responsible — without leaving your deskt
 
 ## The dashboard
 
-- **Overview:** current CPU and memory, a plain-language status summary, GPU,
-  network, storage, uptime and load averages. Switch the detailed chart between
+- **Overview:** current CPU and memory, GPU, network, storage, uptime and
+  load averages. Switch the detailed chart between
   CPU, memory and GPU, with **1, 5 or 15 minutes** of history and hover readouts.
 - **Resources:** every logical CPU, package temperature, available memory,
   reclaimable cache, swap, GPU/VRAM, and CPU/memory/I/O pressure.
@@ -18,7 +18,7 @@ what changed, and which processes are responsible — without leaving your deskt
   lifetime totals, and storage usage/free space for the selected mountpoint.
 - **Processes:** live CPU and resident memory, PID, user and state. Search by
   name/user/PID, sort by CPU/memory/name, or pause the list to inspect it.
-- **Settings:** choose bar chips, units, refresh interval, interface and
+- **Settings:** choose bar chips, bar style, units, refresh interval, interface and
   mountpoint. Changes use the same settings as Omarchy's plugin settings screen.
 
 The design takes cues from [btop](https://github.com/aristocratos/btop),
@@ -39,7 +39,8 @@ background daemon, elevated privileges or remote service are needed.
 
 ## Controls
 
-Click the bar widget to open the dashboard. The gear opens settings.
+Click the bar widget to open the dashboard; right-click it to cycle the bar
+style. The gear opens settings.
 
 | Key | Action |
 | --- | --- |
@@ -58,10 +59,27 @@ Bar readings keep a fixed width, so changing numbers do not move neighboring
 widgets. Vertical bars stack values. Switching off every reading leaves a
 clickable icon, and unavailable hardware never produces a misleading zero.
 
+Right-click the widget to cycle bar styles (also under Settings → Bar style):
+
+| Style | Shows |
+| --- | --- |
+| Icons + values | The default: an icon next to each reading |
+| Values only | Readings without icons |
+| Minimal | A single icon; the readings stay in the tooltip |
+| Alert colours | Theme colour until a reading is high, then amber (warning) or your theme's urgent colour (critical) |
+| Tinted | A slight, distinct hue per metric |
+| Grouped tint | A hue family per device: CPU usage azure / CPU temp ocean blue, GPU violet / plum / orchid, network teal / seafoam, memory green, disk amber |
+| Grouped tint, values only | Grouped tint without icons — colour already says which reading is which |
+
+Tints are mixed into your theme's bar colour rather than replacing it, so they
+stay subtle on light and dark themes. Alert thresholds: CPU/GPU ≥75% / ≥90%,
+memory/VRAM ≥80% / ≥92%, temperatures ≥75°C / ≥90°C, disk ≥85% / ≥95%.
+
 | Setting | Default |
 | --- | --- |
 | CPU, memory, CPU temperature, GPU, GPU temperature, network, disk chips | On |
 | VRAM chip | Off |
+| Bar style | Icons + values |
 | Memory shown as | Used bytes (or percent) |
 | Temperature | Celsius (or Fahrenheit) |
 | Refresh interval | 2 seconds; configurable from 1–30 |
@@ -93,10 +111,6 @@ uses hwmon names and prefers package-wide CPU readings.
   was created/reset, not monthly usage or totals since opening this panel.
 - **Storage:** `df -Pk`; free space is space available to applications, which
   can exclude reserved blocks. Capacity updates once a minute.
-- **Status:** advisory indicators from available readings, not a hardware
-  diagnosis. Warnings appear at CPU ≥90%, memory/disk ≥90%, CPU temperature
-  ≥90°C, GPU temperature ≥85°C, CPU pressure ≥20%, or memory/I/O pressure ≥10%.
-  They appear inside the panel; the bar keeps your theme's foreground color.
 
 ## Sampling and overhead
 

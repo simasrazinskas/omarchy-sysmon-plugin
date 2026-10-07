@@ -57,12 +57,6 @@ test('process search includes user and PID with stable sorting', () => {
   assert.equal(M.filterProcesses(rows,'','cpu')[0].pid,2)
   assert.equal(rows[0].pid,2)
 })
-test('health warns on genuine pressure and does not claim healthy before sampling', () => {
-  assert.equal(M.health({},{}).title,'Collecting readings')
-  assert.equal(M.health({cpu:10,mem:{percent:40}},{}).title,'Running smoothly')
-  assert.equal(M.health({cpu:10,mem:{percent:95}},{}).issues.length,1)
-  assert.equal(M.health({cpu:10,mem:{percent:40}},{memory:{avg10:12}}).title,'Needs attention')
-})
 test('formatters distinguish missing data and zero', () => {
   assert.equal(M.percent(null),'—'); assert.equal(M.percent(0),'0.0%')
   assert.equal(M.bytes(null),'—'); assert.equal(M.bytes(1024),'1.0 KiB')
