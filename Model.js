@@ -26,7 +26,7 @@ var CHIP_ORDER = ["cpu", "cpuTemp", "ram", "gpu", "gpuTemp", "vram", "net", "dis
 // with spaces to the same width for its plain-text form.
 var WIDTHS = { percent: 4, temp: 4, size: 4, rate: 4 }
 
-// Bar styles, in the order a right-click cycles through them. `layout` says
+// Bar styles, in the order Settings lists them. `layout` says
 // what each chip draws and `colors` how it is coloured, so the bar and the
 // settings panel read the same table and a new style is one line here.
 //   layout: "full" icon + value, "values" value only, "minimal" one icon
@@ -84,11 +84,6 @@ var LIMITS = { percent: [75, 90], ram: [80, 92], temp: [75, 90], disk: [85, 95] 
 function barMode(value) {
   for (var i = 0; i < BAR_MODES.length; i++) if (BAR_MODES[i].key === value) return BAR_MODES[i]
   return BAR_MODES[0]
-}
-
-function nextBarMode(value) {
-  var current = barMode(value)
-  return BAR_MODES[(BAR_MODES.indexOf(current) + 1) % BAR_MODES.length].key
 }
 
 // 0 normal, 1 warning, 2 critical. Missing readings are never alarming.
@@ -559,7 +554,6 @@ if (typeof module !== "undefined") {
     TINTS: TINTS,
     GROUP_TINTS: GROUP_TINTS,
     barMode: barMode,
-    nextBarMode: nextBarMode,
     chipTint: chipTint,
     padLeft: padLeft,
     padRight: padRight,

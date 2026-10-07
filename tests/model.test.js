@@ -432,15 +432,12 @@ test("default-route selection skips linkdown and keeps the first equal metric", 
   assert.equal(Model.parseDefaultRouteIface("10.0.0.0/8 dev eth0"), "")
 })
 
-test("right-click cycles every bar mode and wraps around", () => {
-  const seen = []
-  let mode = "full"
-  for (let i = 0; i < Model.BAR_MODES.length; i++) { seen.push(mode); mode = Model.nextBarMode(mode) }
-  assert.equal(mode, "full")
-  assert.deepEqual(seen, Model.BAR_MODES.map(m => m.key))
-  // An unknown or missing setting falls back to the default style.
+test("bar modes have unique keys and unknown settings fall back to the default", () => {
+  const keys = Model.BAR_MODES.map(m => m.key)
+  assert.equal(new Set(keys).size, keys.length)
+  assert.equal(Model.barMode("grouped").key, "grouped")
   assert.equal(Model.barMode("bogus").key, "full")
-  assert.equal(Model.nextBarMode(undefined), Model.BAR_MODES[1].key)
+  assert.equal(Model.barMode(undefined).key, "full")
 })
 
 test("manifest offers exactly the modes the bar can render", () => {

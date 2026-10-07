@@ -39,8 +39,7 @@ background daemon, elevated privileges or remote service are needed.
 
 ## Controls
 
-Click the bar widget to open the dashboard; right-click it to cycle the bar
-style. The gear opens settings.
+Click the bar widget to open the dashboard. The gear opens settings.
 
 | Key | Action |
 | --- | --- |
@@ -59,7 +58,7 @@ Bar readings keep a fixed width, so changing numbers do not move neighboring
 widgets. Vertical bars stack values. Switching off every reading leaves a
 clickable icon, and unavailable hardware never produces a misleading zero.
 
-Right-click the widget to cycle bar styles (also under Settings → Bar style):
+Choose a bar style under Settings → Bar style:
 
 | Style | Shows |
 | --- | --- |

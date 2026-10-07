@@ -110,7 +110,7 @@
           "groupedValues"
         ],
         "defaultValue": "full",
-        "description": "Right-click the bar widget to cycle styles. Tinted gives each metric its own hue; Grouped tint gives each device a hue family."
+        "description": "Tinted gives each metric its own hue; Grouped tint gives each device a hue family."
       },
       {
         "key": "ramDisplay",
