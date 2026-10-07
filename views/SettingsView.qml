@@ -28,7 +28,7 @@ Scroller {
   }
   Card {
     width: parent.width; theme: root.theme
-    Caption { theme: root.theme; text: 'BAR STYLE · RIGHT-CLICK THE BAR TO CYCLE' }
+    Caption { theme: root.theme; text: 'BAR STYLE' }
     Flow {
       width: parent.width; spacing: Style.space(6)
       Repeater {

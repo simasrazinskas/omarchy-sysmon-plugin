@@ -56,9 +56,6 @@ Panel {
   readonly property bool showIcons: mode.layout === "full" && !vertical
   readonly property bool minimal: mode.layout === "minimal" || chips.length === 0
 
-  // Right-click steps through Model.BAR_MODES.
-  function cycleBarMode() { persistSetting("barMode", Model.nextBarMode(options.barMode)) }
-
   function chipColor(chip) {
     var tint = Model.chipTint(chip, options.barMode)
     if (!tint) return root.foreground
@@ -114,13 +111,8 @@ Panel {
     fixedWidth: root.vertical ? -1 : barLabel.implicitWidth + scaledHorizontalMargin * 2
     fixedHeight: root.vertical ? verticalLabel.implicitHeight + scaledVerticalPadding * 2 : -1
     tooltipText: Model.tooltipText(service.state, root.options)
-      + (Model.tooltipText(service.state, root.options) ? "\n\n" : "")
-      + "Style: " + root.mode.label + "  ·  right-click to change"
     useActiveColor: false
-    onPressed: function(buttonCode) {
-      if (buttonCode === Qt.RightButton) root.cycleBarMode()
-      else root.toggle()
-    }
+    onPressed: function(buttonCode) { root.toggle() }
 
     // Measures the bar font so a value can reserve a whole number of character
     // widths. Pinning in pixels is what lets the icon sit a few pixels from its
