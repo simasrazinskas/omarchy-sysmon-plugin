@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.simasrazinskas.sysmon",
   "name": "System Monitor",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Simas Razinskas",
   "license": "MIT",
   "description": "Live system dashboard with history, per-core usage, resource pressure and searchable processes.",
@@ -43,7 +43,8 @@
       "networkInterface": "",
       "diskMountpoint": "",
       "historyRange": "1m",
-      "chartMetric": "cpu"
+      "chartMetric": "cpu",
+      "barMode": "full"
     },
     "schema": [
       {
@@ -94,6 +95,22 @@
         "type": "boolean",
         "label": "Show disk usage",
         "defaultValue": true
+      },
+      {
+        "key": "barMode",
+        "type": "enum",
+        "label": "Bar style",
+        "options": [
+          "full",
+          "values",
+          "minimal",
+          "alert",
+          "tint",
+          "grouped",
+          "groupedValues"
+        ],
+        "defaultValue": "full",
+        "description": "Right-click the bar widget to cycle styles. Tinted gives each metric its own hue; Grouped tint gives each device a hue family."
       },
       {
         "key": "ramDisplay",

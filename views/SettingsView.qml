@@ -28,6 +28,17 @@ Scroller {
   }
   Card {
     width: parent.width; theme: root.theme
+    Caption { theme: root.theme; text: 'BAR STYLE · RIGHT-CLICK THE BAR TO CYCLE' }
+    Flow {
+      width: parent.width; spacing: Style.space(6)
+      Repeater {
+        model: Model.BAR_MODES
+        Button { required property var modelData; objectName: 'barMode-' + modelData.key; text: modelData.label; selected: Model.barMode(root.host.options.barMode).key === modelData.key; foreground: root.theme.foreground; accent: root.theme.accent; fontFamily: root.theme.fontFamily; onClicked: root.host.persistSetting('barMode', modelData.key) }
+      }
+    }
+  }
+  Card {
+    width: parent.width; theme: root.theme
     Caption { theme: root.theme; text: 'READINGS' }
     Row {
       width: parent.width; spacing: Style.space(6)

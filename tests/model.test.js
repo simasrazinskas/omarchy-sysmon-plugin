@@ -431,3 +431,71 @@ test("default-route selection skips linkdown and keeps the first equal metric", 
   assert.equal(Model.parseDefaultRouteIface("default via fe80::1 dev wlan0 proto ra metric 600"), "wlan0")
   assert.equal(Model.parseDefaultRouteIface("10.0.0.0/8 dev eth0"), "")
 })
+
+test("right-click cycles every bar mode and wraps around", () => {
+  const seen = []
+  let mode = "full"
+  for (let i = 0; i < Model.BAR_MODES.length; i++) { seen.push(mode); mode = Model.nextBarMode(mode) }
+  assert.equal(mode, "full")
+  assert.deepEqual(seen, Model.BAR_MODES.map(m => m.key))
+  // An unknown or missing setting falls back to the default style.
+  assert.equal(Model.barMode("bogus").key, "full")
+  assert.equal(Model.nextBarMode(undefined), Model.BAR_MODES[1].key)
+})
+
+test("manifest offers exactly the modes the bar can render", () => {
+  const manifest = require("../manifest.json")
+  const setting = manifest.barWidget.schema.find(s => s.key === "barMode")
+  assert.deepEqual(setting.options, Model.BAR_MODES.map(m => m.key))
+})
+
+test("bar text follows the mode's layout", () => {
+  const options = { showCpu: true, showRam: false, showCpuTemp: false, showGpu: false,
+    showGpuTemp: false, showNet: false, showDisk: false }
+  assert.equal(Model.barText(fullState(), { ...options, barMode: "values" }), "12% ")
+  assert.equal(Model.barText(fullState(), { ...options, barMode: "minimal" }), Model.ICONS.cpu)
+  assert.equal(Model.barTextVertical(fullState(), { ...options, barMode: "minimal" }), Model.ICONS.cpu)
+})
+
+test("plain modes leave colour alone; tint modes colour every chip", () => {
+  const chips = Model.buildChips(fullState(), { showVram: true })
+  for (const chip of chips) {
+    assert.equal(Model.chipTint(chip, "full"), null)
+    assert.ok(Model.chipTint(chip, "tint"), `${chip.key} has no tint`)
+    assert.ok(Model.chipTint(chip, "grouped"), `${chip.key} has no grouped tint`)
+  }
+})
+
+test("per-metric tints are all distinct", () => {
+  const hues = Object.values(Model.TINTS)
+  assert.equal(new Set(hues).size, hues.length)
+})
+
+test("grouped tints keep a device's usage and temperature in one hue family", () => {
+  const hue = hex => {
+    const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min
+    const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4
+    return (h * 60 + 360) % 360
+  }
+  const near = (a, b) => Math.min(Math.abs(a - b), 360 - Math.abs(a - b)) < 30
+  const t = Model.GROUP_TINTS
+  assert.notEqual(t.cpu, t.cpuTemp)
+  assert.ok(near(hue(t.cpu), hue(t.cpuTemp)), "CPU pair drifted apart")
+  assert.ok(near(hue(t.gpu), hue(t.gpuTemp)), "GPU pair drifted apart")
+  assert.ok(!near(hue(t.cpu), hue(t.gpu)), "CPU and GPU families collide")
+})
+
+test("alert mode colours only readings that are high", () => {
+  const state = fullState()
+  state.cpu = 95
+  state.cpuTemp = 80
+  const chips = Object.fromEntries(Model.buildChips(state, {}).map(c => [c.key, c]))
+  assert.equal(chips.cpu.level, 2)
+  assert.equal(chips.cpuTemp.level, 1)
+  assert.equal(chips.disk.level, 0)
+  assert.equal(Model.chipTint(chips.cpu, "alert").hue, "urgent")
+  assert.ok(Model.chipTint(chips.cpuTemp, "alert"))
+  assert.equal(Model.chipTint(chips.disk, "alert"), null)
+  assert.equal(Model.chipTint(chips.netDown, "alert"), null)
+})

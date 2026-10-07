@@ -7,12 +7,11 @@ Omarchy popup rather than reproducing a full task manager.
 | --- | --- | --- |
 | [btop](https://github.com/aristocratos/btop) (C++ releases since 2021) | Resource graphs, network auto-scaling, sortable/filterable processes, pause | Timestamped 1/5/15-minute history, traffic chart, process search/sort/pause |
 | [htop](https://htop.dev/) | Interactive process inspection and per-core visibility | Per-core meters, PID/user/state context, one-core CPU convention |
-| [Glances](https://nicolargo.github.io/glances/) | A compact system overview with resource alerts | At-a-glance status, pressure readings, local advisory thresholds |
+| [Glances](https://nicolargo.github.io/glances/) | A compact system overview with resource alerts | Pressure readings, bar alert colours with local advisory thresholds |
 | [Trading212 plugin](https://github.com/simasrazinskas/omarchy-trading212-plugin) | Clear hierarchy, restrained themed surfaces, focused tabs | Shared design language, fixed navigation, scrollable views, separate preferences |
 
-The status summary answers “is anything worth looking at?” The overview gives
-current values and recent trends. Resources explains CPU, memory and GPU load;
-Activity provides network and storage context; Processes answers “what is using
+The overview gives current values and recent trends. Resources explains CPU,
+memory and GPU load; Activity provides network and storage context; Processes answers “what is using
 it?” Settings do not compete with the readings for space.
 
 ## Measurement choices
