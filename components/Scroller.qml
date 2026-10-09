@@ -1,9 +1,10 @@
 import QtQuick
 import QtQuick.Controls
+import qs.Commons
 
 // Vertical scroll container for a tab's content. `content` children go in a
-// Column sized to the view's width; `scrollBy` backs j/k, `reveal` keeps a
-// keyboard-selected row on screen.
+// Column the full width of the view, so cards line up with the tab row; the
+// scrollbar is transient and overlays the edge only while scrolling.
 Flickable {
   id: root
 
@@ -18,23 +19,13 @@ Flickable {
   interactive: contentHeight > height
   ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-  function scrollBy(dy) {
-    contentY = Math.max(0, Math.min(Math.max(0, contentHeight - height), contentY + dy))
-  }
-
-  function reveal(item) {
-    if (!item) return
-    var pos = item.mapToItem(column, 0, 0)
-    if (pos.y < contentY) contentY = Math.max(0, pos.y - 8)
-    else if (pos.y + item.height > contentY + height) contentY = Math.min(Math.max(0, contentHeight - height), pos.y + item.height - height + 8)
-  }
-
-  function toTop() {
-    contentY = 0
+  // j/k and the arrow keys step by a few lines of content.
+  function move(dy) {
+    contentY = Math.max(0, Math.min(Math.max(0, contentHeight - height), contentY + dy * Style.space(48)))
   }
 
   Column {
     id: column
-    width: root.width - 10
+    width: root.width
   }
 }

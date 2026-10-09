@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Regenerates the README screenshots in docs/ from this machine's live
+# readings, rendered offscreen at 2x. Takes about a minute and a half: the
+# charts need a minute of history first. SYSMON_WARMUP=5 for a quick look.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+out="${1:-$here/../docs}"
+mkdir -p "$out"
+out="$(cd "$out" && pwd)"
+warmup="${SYSMON_WARMUP:-62}"
+SYSMON_CAPTURE_DIR="$out" SYSMON_WARMUP="$warmup" QT_SCALE_FACTOR=2 \
+  "$here/run-qml" "$here/screenshots.qml" $((warmup + 40)) | rg 'SHOT|Error|error' || true
+for png in "$out"/{overview,resources,activity,processes,settings,bar-styles}.png; do
+  [[ -s "$png" ]] || { echo "missing $png" >&2; exit 1; }
+done
+if command -v oxipng >/dev/null; then oxipng -q -o 3 --strip safe "$out"/*.png; fi
+echo "screenshots written to $out"

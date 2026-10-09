@@ -7,7 +7,7 @@ Omarchy popup rather than reproducing a full task manager.
 | --- | --- | --- |
 | [btop](https://github.com/aristocratos/btop) (C++ releases since 2021) | Resource graphs, network auto-scaling, sortable/filterable processes, pause | Timestamped 1/5/15-minute history, traffic chart, process search/sort/pause |
 | [htop](https://htop.dev/) | Interactive process inspection and per-core visibility | Per-core meters, PID/user/state context, one-core CPU convention |
-| [Glances](https://nicolargo.github.io/glances/) | A compact system overview with resource alerts | Pressure readings, bar alert colours with local advisory thresholds |
+| [Glances](https://nicolargo.github.io/glances/) | A compact system overview with resource alerts | Pressure readings; one set of advisory thresholds shared by bar alert colours and dashboard meters |
 | [Trading212 plugin](https://github.com/simasrazinskas/omarchy-trading212-plugin) | Clear hierarchy, restrained themed surfaces, focused tabs | Shared design language, fixed navigation, scrollable views, separate preferences |
 
 The overview gives current values and recent trends. Resources explains CPU,
@@ -37,7 +37,11 @@ it?” Settings do not compete with the readings for space.
 ## Visual and runtime checks
 
 `tests/qml-smoke` renders the real dashboard offscreen using the installed
-Omarchy components and live readings. It covers every view, a compact window,
-a light palette, search, pause/resume, settings binding and process sampling
+Omarchy components and live readings. It covers every view, every bar style,
+a compact window, a light palette, search, pause/resume, process-list scroll
+position across refreshes, settings binding and the process sampling
 lifecycle. It fails on runtime QML errors. The layer-shell bar host is checked
 separately on Wayland because offscreen Qt cannot create layer-shell surfaces.
+
+`tests/screenshots` renders the README images the same way, at 2x, after a
+minute of live history so the charts are populated.
