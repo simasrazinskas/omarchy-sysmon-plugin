@@ -5,11 +5,14 @@ import Quickshell.Io
 import qs.Commons
 import "plugin" as Plugin
 import "plugin/components" as Components
+import "plugin/Model.js" as Model
 ShellRoot {
   id: test
   property int stage: 0
+  property var scrolledList: null
+  property double scrolledAt: 0
   property string output: Quickshell.env('SYSMON_CAPTURE_DIR')
-  Plugin.Service { id: readings; settings: host.settings; processesActive: host.tab === 3 && !host.settingsOpen }
+  Plugin.Service { id: readings; settings: host.settings; processesActive: host.tab === host.processesTab && !host.settingsOpen }
   Components.Theme { id: palette }
   Item {
     id: host
@@ -17,10 +20,11 @@ ShellRoot {
     property bool settingsOpen: false
     property bool opened: true
     property var tabs: ['Overview', 'Resources', 'Activity', 'Processes']
+    readonly property int processesTab: 3
     property int historySeconds: 60
     property string chartMetric: 'cpu'
     property var settings: ({refreshIntervalSec: 1})
-    property var options: Object.assign({tempUnit:'C', ramDisplay:'used'}, settings)
+    property var options: Object.assign({tempUnit:'C', ramDisplay:'used', barMode:'full'}, settings)
     function persistSetting(key, value) { var next = Object.assign({}, settings); next[key] = value; settings = next; if (key === 'historyRange') historySeconds = parseInt(value) * 60; else if (key === 'chartMetric') chartMetric = value }
     function selectTab(index) { tab = index; settingsOpen = false }
     function focusPanel() {}
@@ -33,6 +37,22 @@ ShellRoot {
   }
   function check(condition, message) {
     if (!condition) { console.error('SMOKE_FAILED: ' + message); Qt.quit() }
+  }
+  // Every bar style, rendered from the live readings.
+  Window {
+    width: 900; height: 40 * Model.BAR_MODES.length; visible: true; color: Color.background
+    Column {
+      id: barStyles
+      Repeater {
+        model: Model.BAR_MODES
+        Components.BarReadings {
+          required property var modelData
+          width: implicitWidth; height: 40
+          chips: Model.buildChips(readings.state, {showVram: true})
+          barMode: modelData.key
+        }
+      }
+    }
   }
   Window {
     id: window
@@ -57,6 +77,13 @@ ShellRoot {
       if (test.stage === 3 && readings.processes.length === 0) {
         console.error('SMOKE_FAILED: processes did not sample'); Qt.quit(); return
       }
+      if (test.stage === 0) {
+        var overview = dashboard.view
+        test.check(overview.contentItem.children[0].width === overview.width, 'cards span the full view width')
+        test.check(barStyles.children.length >= Model.BAR_MODES.length, 'every bar style renders')
+        for (var b = 0; b < Model.BAR_MODES.length; b++)
+          test.check(barStyles.children[b].implicitWidth > 0, 'bar style ' + Model.BAR_MODES[b].key + ' has content')
+      }
       if (test.stage === 3) {
         var view = dashboard.view
         var search = test.find(view, 'processSearch')
@@ -70,6 +97,12 @@ ShellRoot {
         test.check(view.paused && view.frozen.length > 0, 'pause freezes rows')
         pause.clicked()
         test.check(!view.paused, 'resume returns to live data')
+        var list = test.find(view, 'processList')
+        test.check(list.contentHeight > list.height + 200, 'process list is long enough to scroll')
+        test.scrolledList = list
+        test.scrolledAt = readings.processUpdated
+        // Scroll after this tick's search/pause updates have settled.
+        Qt.callLater(function() { list.contentY = 200 })
       }
       if (test.stage === 4) {
         var toggle = test.find(dashboard.view, 'showCpu')
@@ -86,6 +119,17 @@ ShellRoot {
       }
       if (test.output) capture.grabToImage(function(result) { result.saveToFile(test.output + '/view-' + test.stage + '.png') })
       console.log('SMOKE_VIEW', test.stage, 'cpu', readings.cpu, 'memory', readings.mem !== null, 'cores', readings.coreLoads.length, 'processes', readings.processes.length)
+      if (test.stage === 3) scrollCheck.restart()
+      else advance.restart()
+    }
+  }
+  // A refreshed process list must not throw the reader back to the top.
+  Timer {
+    id: scrollCheck; interval: 2600
+    onTriggered: {
+      test.check(readings.processUpdated > test.scrolledAt, 'processes refreshed while scrolled')
+      console.log('SMOKE_SCROLL', test.scrolledList.contentY)
+      test.check(Math.abs(test.scrolledList.contentY - 200) < 1, 'process list keeps its scroll position across refreshes')
       advance.restart()
     }
   }

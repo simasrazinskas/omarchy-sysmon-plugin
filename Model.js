@@ -1,5 +1,7 @@
-// Pure parsing and formatting for the System Monitor bar widget. No QML or
-// Quickshell types in here so the whole file runs under `node --test` too.
+// The bar widget: chips, styles, compact formatting and the tooltip, plus the
+// parsers for the sources only the bar's service reads (net/dev, hwmon, GPU,
+// default route). No QML or Quickshell types in here so the whole file runs
+// under `node --test` too. Dashboard maths lives in Metrics.js.
 
 // Glyphs are checked against JetBrainsMono Nerd Font, which Omarchy ships as
 // ttf-jetbrains-mono-nerd-basic. Font Awesome's fa-memory (U+F538) is NOT in
@@ -107,12 +109,6 @@ function chipTint(chip, mode) {
   return null
 }
 
-function padLeft(value, width) {
-  var text = String(value)
-  while (text.length < width) text = " " + text
-  return text
-}
-
 // Values are padded on the right, not the left. Right-aligning them would put
 // the slack between the icon and its own number — "5%" would sit three cells
 // from its icon while "100%" sat one — which reads as a wobbling gap. Padding
@@ -122,64 +118,6 @@ function padRight(value, width) {
   var text = String(value)
   while (text.length < width) text += " "
   return text
-}
-
-// ---------------------------------------------------------------- /proc/stat
-
-// The first `cpu` line is the aggregate across every core. guest and
-// guest_nice are deliberately excluded: the kernel already counts them inside
-// user and nice, so adding them again would inflate the total and understate
-// load.
-function parseCpuTotals(text) {
-  var lines = String(text || "").split("\n")
-  for (var i = 0; i < lines.length; i++) {
-    if (lines[i].indexOf("cpu ") !== 0) continue
-    var fields = lines[i].trim().split(/\s+/)
-    var total = 0
-    for (var f = 1; f <= 8 && f < fields.length; f++) {
-      var value = parseInt(fields[f], 10)
-      if (!isFinite(value)) return null
-      total += value
-    }
-    var idle = parseInt(fields[4], 10)
-    var iowait = fields.length > 5 ? parseInt(fields[5], 10) : 0
-    if (!isFinite(idle)) return null
-    if (!isFinite(iowait)) iowait = 0
-    return { total: total, idle: idle + iowait }
-  }
-  return null
-}
-
-// Busy share between two readings. The first tick after startup has no
-// previous sample and deliberately returns null rather than 0 — a real 0%
-// and "not known yet" must not render the same.
-function cpuPercent(previous, current) {
-  if (!previous || !current) return null
-  var totalDelta = current.total - previous.total
-  var idleDelta = current.idle - previous.idle
-  if (totalDelta <= 0) return null
-  var busy = (1 - idleDelta / totalDelta) * 100
-  return Math.max(0, Math.min(100, busy))
-}
-
-// ------------------------------------------------------------- /proc/meminfo
-
-// MemAvailable is the kernel's own estimate of what a new allocation could
-// claim, which is the number people mean by "free". total - free would count
-// reclaimable page cache as used and report a permanently near-full machine.
-function parseMeminfo(text) {
-  var lines = String(text || "").split("\n")
-  var total = null
-  var available = null
-  for (var i = 0; i < lines.length; i++) {
-    var match = lines[i].match(/^(MemTotal|MemAvailable):\s+(\d+)\s+kB/)
-    if (!match) continue
-    if (match[1] === "MemTotal") total = parseInt(match[2], 10) * 1024
-    else available = parseInt(match[2], 10) * 1024
-  }
-  if (total === null || available === null || total <= 0) return null
-  var used = Math.max(0, total - available)
-  return { total: total, used: used, percent: (used / total) * 100 }
 }
 
 // ------------------------------------------------------------ /proc/net/dev
@@ -265,22 +203,6 @@ function parseSysfsGpu(busyText, vramUsedText, vramTotalText, tempText) {
     vramUsed: isFinite(used) ? used : null,
     vramTotal: isFinite(total) && total > 0 ? total : null
   }
-}
-
-// -------------------------------------------------------------------- disk
-
-// `df -P` output: Filesystem 1024-blocks Used Available Capacity Mounted-on.
-// -P forces one record per line, so a long device name cannot wrap and shift
-// the columns.
-function parseDiskPercent(text) {
-  var lines = String(text || "").trim().split("\n")
-  if (lines.length < 2) return null
-  var fields = lines[lines.length - 1].trim().split(/\s+/)
-  for (var i = 0; i < fields.length; i++) {
-    var match = fields[i].match(/^(\d+)%$/)
-    if (match) return parseInt(match[1], 10)
-  }
-  return null
 }
 
 // Pick the lowest metric among default routes, retaining order on ties.
@@ -419,17 +341,6 @@ function barText(state, options) {
   return parts.join(" ")
 }
 
-// A vertical bar is 28px wide — an icon plus a four-character value does not
-// fit on one line. Stack the values instead and drop the icons: the reading is
-// the part worth keeping, and the tooltip still names every one of them.
-function barTextVertical(state, options) {
-  var chips = buildChips(state, options)
-  if (barMode(options && options.barMode).layout === "minimal") return chips.length ? ICONS.cpu : ""
-  var parts = []
-  for (var i = 0; i < chips.length; i++) parts.push(chips[i].value)
-  return parts.join("\n")
-}
-
 // Full-precision readings, independent of which chips are switched on: the bar
 // is the summary, this is everything the widget knows. Both the panel and the
 // hover tooltip render from this one list so they can never disagree.
@@ -494,6 +405,20 @@ function tooltipText(state, options) {
   return lines.join("\n")
 }
 
+// The chips the panel offers as switches, in the order they render in the bar.
+// `key` is the settings key the toggle writes, so the panel and the plugin
+// settings screen drive exactly the same values.
+var TOGGLES = [
+  { key: "showCpu", label: "CPU usage", defaultValue: true },
+  { key: "showCpuTemp", label: "CPU temperature", defaultValue: true },
+  { key: "showRam", label: "Memory", defaultValue: true },
+  { key: "showGpu", label: "GPU usage", defaultValue: true },
+  { key: "showGpuTemp", label: "GPU temperature", defaultValue: true },
+  { key: "showVram", label: "VRAM used", defaultValue: false },
+  { key: "showNet", label: "Network throughput", defaultValue: true },
+  { key: "showDisk", label: "Disk usage", defaultValue: true }
+]
+
 // One row per switchable chip: its label, its current reading, and whether it
 // is in the bar. Collapsing the readings and the switches into a single list
 // keeps the panel short enough to fit — a separate readings section plus
@@ -531,20 +456,6 @@ function panelRows(state, options) {
   return rows
 }
 
-// The chips the panel offers as switches, in the order they render in the bar.
-// `key` is the settings key the toggle writes, so the panel and the plugin
-// settings screen drive exactly the same values.
-var TOGGLES = [
-  { key: "showCpu", label: "CPU usage", defaultValue: true },
-  { key: "showCpuTemp", label: "CPU temperature", defaultValue: true },
-  { key: "showRam", label: "Memory", defaultValue: true },
-  { key: "showGpu", label: "GPU usage", defaultValue: true },
-  { key: "showGpuTemp", label: "GPU temperature", defaultValue: true },
-  { key: "showVram", label: "VRAM used", defaultValue: false },
-  { key: "showNet", label: "Network throughput", defaultValue: true },
-  { key: "showDisk", label: "Disk usage", defaultValue: true }
-]
-
 if (typeof module !== "undefined") {
   module.exports = {
     ICONS: ICONS,
@@ -553,26 +464,23 @@ if (typeof module !== "undefined") {
     BAR_MODES: BAR_MODES,
     TINTS: TINTS,
     GROUP_TINTS: GROUP_TINTS,
+    LIMITS: LIMITS,
+    ALERT_WARN: ALERT_WARN,
     barMode: barMode,
+    level: level,
     chipTint: chipTint,
-    padLeft: padLeft,
     padRight: padRight,
-    parseCpuTotals: parseCpuTotals,
-    cpuPercent: cpuPercent,
-    parseMeminfo: parseMeminfo,
     parseNetDev: parseNetDev,
     netRates: netRates,
     parseTemp: parseTemp,
     parseNvidia: parseNvidia,
     parseSysfsGpu: parseSysfsGpu,
-    parseDiskPercent: parseDiskPercent,
     parseDefaultRouteIface: parseDefaultRouteIface,
     formatBytes: formatBytes,
     formatPercent: formatPercent,
     formatTemp: formatTemp,
     buildChips: buildChips,
     barText: barText,
-    barTextVertical: barTextVertical,
     detailRows: detailRows,
     panelRows: panelRows,
     tooltipText: tooltipText,

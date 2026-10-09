@@ -3,8 +3,8 @@ import Quickshell.Io
 import "Model.js" as Model
 import "Metrics.js" as Metrics
 
-// Data layer: samples the machine and exposes one `state` object for the
-// widget to render.
+// Data layer: samples the machine and exposes the readings the bar and the
+// dashboard render.
 //
 // Everything the kernel publishes as a file is read in-process with FileView —
 // /proc and /sys are cheap, and forking a helper twice a second to read data
@@ -15,41 +15,8 @@ Item {
 
   property var settings: ({})
   property bool processesActive: false
-  property var history: []
-  property var coreLoads: []
-  property var _prevCores: null
-  property var memoryDetail: null
-  property var diskDetail: null
-  property var loadAverage: null
-  property var uptime: null
-  property string cpuName: ""
-  property string hostname: ""
-  property var pressureCpu: null
-  property var pressureMemory: null
-  property var pressureIo: null
-  readonly property var pressures: ({cpu: pressureCpu, memory: pressureMemory, io: pressureIo})
-  property var networkTotals: null
-  property double lastSample: 0
-  property var processes: []
-  property var _previousProcesses: null
-  property string processError: ""
-  property double processUpdated: 0
 
-  onProcessesActiveChanged: {
-    if (processesActive) { _previousProcesses = null; processes = []; refreshProcesses() }
-  }
-
-  function refreshProcesses() {
-    if (processesActive && !processReader.running) processReader.running = true
-  }
-
-  function record() {
-    var now = Date.now()
-    lastSample = now
-    history = Metrics.append(history, {time: now, cpu: cpu, ram: mem ? mem.percent : null,
-      gpu: gpuController.reading ? gpuController.reading.util : null,
-      down: net ? net.down : null, up: net ? net.up : null})
-  }
+  // ------------------------------------------------------------- settings
 
   readonly property int refreshIntervalSec: intSetting("refreshIntervalSec", 2, 1, 30)
   readonly property string configuredInterface: String(setting("networkInterface", "")).trim()
@@ -59,39 +26,8 @@ Item {
   // route is re-read periodically so a laptop moving between wifi and ethernet
   // follows along without anyone editing settings.
   property string detectedInterface: ""
-  property string detectedMount: "/"
-  property string cpuTempPath: ""
-
   readonly property string activeInterface: configuredInterface !== "" ? configuredInterface : detectedInterface
-  readonly property string activeMount: configuredMount !== "" ? configuredMount : detectedMount
-
-  property var cpu: null
-  property var mem: null
-  property var cpuTemp: null
-  property var net: null
-  property var disk: null
-
-  // Previous cumulative counters, kept with the timestamp they were taken at
-  // so a rate is computed against the interval that actually elapsed rather
-  // than the interval that was scheduled.
-  property var _prevCpu: null
-  property var _prevNet: null
-  property double _prevNetMs: 0
-
-  // Which vendor backend won, so the panel can say what it is reading from —
-  // empty when no GPU could be read at all.
-  readonly property string gpuVendor: gpuController.available ? gpuController.vendor : ""
-
-  readonly property var state: ({
-    cpu: cpu,
-    mem: mem,
-    cpuTemp: cpuTemp,
-    gpu: gpuController.reading,
-    net: net,
-    disk: disk,
-    netInterface: activeInterface,
-    diskMount: activeMount
-  })
+  readonly property string activeMount: configuredMount !== "" ? configuredMount : "/"
 
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
@@ -104,28 +40,63 @@ Item {
     return Math.max(minimum, Math.min(maximum, value))
   }
 
-  // A changed interface invalidates the counters the old one accumulated;
-  // keeping them would produce one huge bogus rate on the first tick after the
-  // switch, as the difference between two unrelated interfaces is reported as
-  // traffic.
-  onActiveInterfaceChanged: {
-    _prevNet = null
-    _prevNetMs = 0
-    net = null
-    networkTotals = null
-    // Never label traffic from the old interface as belonging to the new one.
-    history = history.map(function(sample) {
-      var copy = Object.assign({}, sample)
-      copy.down = null; copy.up = null
-      return copy
-    })
-  }
+  // ------------------------------------------------------------- readings
 
-  onActiveMountChanged: {
-    disk = null
-    diskDetail = null
-    refreshDisk()
-  }
+  property var cpu: null
+  property var coreLoads: []
+  property var cpuTemp: null
+  property string cpuTempPath: ""
+  // Total/used/percent plus available, cache and swap; see Metrics.memory.
+  property var mem: null
+  property var net: null
+  property var networkTotals: null
+  // A named interface that /proc/net/dev does not list — usually a typo in
+  // settings, or a USB adapter that is unplugged.
+  property bool interfaceMissing: false
+  property var disk: null
+  property var diskDetail: null
+  property var loadAverage: null
+  property var uptime: null
+  property var pressureCpu: null
+  property var pressureMemory: null
+  property var pressureIo: null
+  property string cpuName: ""
+  property string hostname: ""
+
+  readonly property var gpu: gpuController.reading
+  // Which vendor backend won, so the panel can say what it is reading from —
+  // empty when no GPU could be read at all.
+  readonly property string gpuVendor: gpuController.available ? gpuController.vendor : ""
+
+  // The bar's view of the readings; Model.buildChips and the tooltip read it.
+  readonly property var state: ({
+    cpu: cpu,
+    mem: mem,
+    cpuTemp: cpuTemp,
+    gpu: gpu,
+    net: net,
+    disk: disk,
+    netInterface: activeInterface,
+    diskMount: activeMount
+  })
+
+  // Timestamped samples for the charts; see Metrics.append for the bounds.
+  property var history: []
+  property double lastSample: 0
+
+  property var processes: []
+  property string processError: ""
+  property double processUpdated: 0
+
+  // Previous cumulative counters. Network keeps the time it was read at so a
+  // rate is computed against the interval that actually elapsed rather than
+  // the interval that was scheduled.
+  property var _prevCpuTimes: null
+  property var _prevNet: null
+  property double _prevNetMs: 0
+  property var _prevProcesses: null
+
+  // --------------------------------------------------------------- update
 
   function tick() {
     cpuStatFile.reload()
@@ -139,6 +110,16 @@ Item {
     if (cpuTempPath !== "") cpuTempFile.reload()
   }
 
+  // Called once per CPU sample, which is what paces the history.
+  function record() {
+    var now = Date.now()
+    lastSample = now
+    history = Metrics.append(history, {
+      time: now, cpu: cpu, ram: mem ? mem.percent : null, gpu: gpu ? gpu.util : null,
+      down: net ? net.down : null, up: net ? net.up : null
+    })
+  }
+
   function refreshDisk() {
     if (diskProcess.running || activeMount === "") return
     diskProcess.command = ["bash", "-c", "export LC_ALL=C; exec timeout 5 df -Pk -- \"$1\"", "sysmon", activeMount]
@@ -146,35 +127,80 @@ Item {
     diskProcess.running = true
   }
 
-  // ------------------------------------------------------------- procfs reads
+  function refreshRoute() {
+    // Nothing to detect while the user has named an interface explicitly.
+    if (routeProcess.running || configuredInterface !== "") return
+    routeProcess.running = true
+  }
+
+  function refreshProcesses() {
+    if (processesActive && !processReader.running) processReader.running = true
+  }
+
+  function resetProcesses(error) {
+    processes = []
+    _prevProcesses = null
+    processError = error || ""
+  }
+
+  // Process rows are only worth their memory while someone is looking at them.
+  onProcessesActiveChanged: {
+    resetProcesses()
+    if (processesActive) refreshProcesses()
+  }
+
+  // A changed interface invalidates the counters the old one accumulated;
+  // keeping them would report the difference between two unrelated
+  // interfaces as one huge burst of traffic.
+  onActiveInterfaceChanged: {
+    _prevNet = null
+    _prevNetMs = 0
+    net = null
+    networkTotals = null
+    interfaceMissing = false
+    // Never label traffic from the old interface as belonging to the new one.
+    history = history.map(function(sample) {
+      var copy = Object.assign({}, sample)
+      copy.down = null
+      copy.up = null
+      return copy
+    })
+  }
+
+  onActiveMountChanged: {
+    disk = null
+    diskDetail = null
+    refreshDisk()
+  }
+
+  // ---------------------------------------------------------- procfs reads
 
   FileView {
     id: cpuStatFile
     path: "/proc/stat"
     printErrors: false
     onLoaded: {
-      var totals = Model.parseCpuTotals(text())
-      var nextCores = Metrics.cores(text())
-      root.coreLoads = Metrics.coreUsage(root._prevCores, nextCores)
-      root._prevCores = nextCores
-      if (!totals) { root.cpu = null; root._prevCpu = null; root.record(); return }
-      var percent = Model.cpuPercent(root._prevCpu, totals)
-      root._prevCpu = totals
-      // The first sample has nothing to diff against, so cpu stays null and
-      // the chip does not render until the second tick — a real 0% and "not
-      // measured yet" must not look the same.
-      root.cpu = percent
+      var times = Metrics.cpuTimes(text())
+      var previous = root._prevCpuTimes
+      root.cpu = Metrics.busy(previous ? previous.cpu : null, times.cpu || null)
+      root.coreLoads = Metrics.coreUsage(previous, times)
+      root._prevCpuTimes = times.cpu ? times : null
       root.record()
     }
-    onLoadFailed: { root.cpu = null; root._prevCpu = null; root.coreLoads = []; root._prevCores = null; root.record() }
+    onLoadFailed: {
+      root.cpu = null
+      root.coreLoads = []
+      root._prevCpuTimes = null
+      root.record()
+    }
   }
 
   FileView {
     id: memInfoFile
     path: "/proc/meminfo"
     printErrors: false
-    onLoaded: { root.mem = Model.parseMeminfo(text()); root.memoryDetail = Metrics.memory(text()) }
-    onLoadFailed: { root.mem = null; root.memoryDetail = null }
+    onLoaded: root.mem = Metrics.memory(text())
+    onLoadFailed: root.mem = null
   }
 
   FileView {
@@ -183,19 +209,18 @@ Item {
     printErrors: false
     onLoaded: {
       var counters = Model.parseNetDev(text(), root.activeInterface)
-      root.networkTotals = counters
       var now = Date.now()
-      if (!counters) {
-        root.net = null
-        root._prevNet = null
-        return
-      }
-      var rates = Model.netRates(root._prevNet, counters, now - root._prevNetMs)
+      root.networkTotals = counters
+      root.interfaceMissing = counters === null
+      root.net = counters ? Model.netRates(root._prevNet, counters, now - root._prevNetMs) : null
       root._prevNet = counters
       root._prevNetMs = now
-      root.net = rates
     }
-    onLoadFailed: { root.net = null; root.networkTotals = null; root._prevNet = null }
+    onLoadFailed: {
+      root.net = null
+      root.networkTotals = null
+      root._prevNet = null
+    }
   }
 
   FileView {
@@ -206,7 +231,63 @@ Item {
     onLoadFailed: root.cpuTemp = null
   }
 
-  // ---------------------------------------------------------------- discovery
+  FileView {
+    id: loadFile
+    path: "/proc/loadavg"
+    printErrors: false
+    onLoaded: root.loadAverage = Metrics.load(text())
+    onLoadFailed: root.loadAverage = null
+  }
+
+  FileView {
+    id: uptimeFile
+    path: "/proc/uptime"
+    printErrors: false
+    onLoaded: root.uptime = Metrics.uptime(text())
+    onLoadFailed: root.uptime = null
+  }
+
+  FileView {
+    id: pressureCpuFile
+    path: "/proc/pressure/cpu"
+    printErrors: false
+    onLoaded: root.pressureCpu = Metrics.pressure(text())
+    onLoadFailed: root.pressureCpu = null
+  }
+
+  FileView {
+    id: pressureMemoryFile
+    path: "/proc/pressure/memory"
+    printErrors: false
+    onLoaded: root.pressureMemory = Metrics.pressure(text())
+    onLoadFailed: root.pressureMemory = null
+  }
+
+  FileView {
+    id: pressureIoFile
+    path: "/proc/pressure/io"
+    printErrors: false
+    onLoaded: root.pressureIo = Metrics.pressure(text())
+    onLoadFailed: root.pressureIo = null
+  }
+
+  // Read once: neither changes while the shell runs.
+  FileView {
+    path: "/proc/cpuinfo"
+    printErrors: false
+    onLoaded: {
+      var m = text().match(/(?:model name|Hardware)\s*:\s*(.+)/)
+      root.cpuName = m ? m[1].trim() : ""
+    }
+  }
+
+  FileView {
+    path: "/proc/sys/kernel/hostname"
+    printErrors: false
+    onLoaded: root.hostname = text().trim()
+  }
+
+  // ------------------------------------------------------------ discovery
 
   // hwmon numbering is assigned in probe order and is not stable across boots,
   // so the CPU sensor has to be found by name rather than hardcoded. Prefer a
@@ -253,12 +334,6 @@ Item {
     }
   }
 
-  function refreshRoute() {
-    // Nothing to detect while the user has named an interface explicitly.
-    if (routeProcess.running || root.configuredInterface !== "") return
-    routeProcess.running = true
-  }
-
   Process {
     id: diskProcess
     property string requestedMount: ""
@@ -267,9 +342,36 @@ Item {
       waitForEnd: true
     }
     onExited: function(exitCode) {
+      // The mountpoint changed while df ran; measure the new one instead.
       if (requestedMount !== root.activeMount) { Qt.callLater(root.refreshDisk); return }
       root.diskDetail = exitCode === 0 ? Metrics.disk(String(diskStdout.text || "")) : null
       root.disk = root.diskDetail ? root.diskDetail.percent : null
+    }
+  }
+
+  Process {
+    id: processReader
+    command: ["timeout", "5", "python3",
+      decodeURIComponent(Qt.resolvedUrl("scripts/processes.py").toString().replace(/^file:\/\//, ""))]
+    stdout: StdioCollector {
+      id: processOutput
+      waitForEnd: true
+    }
+    onExited: function(exitCode) {
+      if (!root.processesActive) return
+      if (exitCode !== 0) {
+        root.resetProcesses("Process readings unavailable. Check that Python 3 is installed.")
+        return
+      }
+      try {
+        var snapshot = JSON.parse(processOutput.text)
+        root.processes = Metrics.processRates(root._prevProcesses, snapshot)
+        root._prevProcesses = snapshot
+        root.processUpdated = Date.now()
+        root.processError = ""
+      } catch (e) {
+        root.resetProcesses("Could not read processes.")
+      }
     }
   }
 
@@ -278,7 +380,7 @@ Item {
     intervalMs: Math.max(5000, root.refreshIntervalSec * 1000)
   }
 
-  // ------------------------------------------------------------------- timers
+  // --------------------------------------------------------------- timers
 
   Timer {
     interval: root.refreshIntervalSec * 1000
@@ -299,69 +401,23 @@ Item {
     onTriggered: root.refreshDisk()
   }
 
+  // Route changes and a sensor that appears late (a module loaded after the
+  // shell started) are both rare; checking twice a minute is plenty.
   Timer {
     interval: 30000
     running: true
     repeat: true
     triggeredOnStart: true
-    onTriggered: { root.refreshRoute(); if (root.cpuTemp === null && !cpuTempProbe.running) cpuTempProbe.running = true }
-  }
-
-
-  FileView {
-    id: loadFile; path: "/proc/loadavg"; printErrors: false
-    onLoaded: root.loadAverage = Metrics.load(text())
-    onLoadFailed: root.loadAverage = null
-  }
-  FileView {
-    id: uptimeFile; path: "/proc/uptime"; printErrors: false
-    onLoaded: { var n = parseFloat(text()); root.uptime = isFinite(n) ? n : null }
-    onLoadFailed: root.uptime = null
-  }
-  FileView {
-    path: "/proc/cpuinfo"; printErrors: false
-    onLoaded: { var m = text().match(/(?:model name|Hardware)\s*:\s*(.+)/); root.cpuName = m ? m[1].trim() : "Processor" }
-  }
-  FileView {
-    path: "/proc/sys/kernel/hostname"; printErrors: false
-    onLoaded: root.hostname = text().trim()
-  }
-  FileView {
-    id: pressureCpuFile; path: "/proc/pressure/cpu"; printErrors: false
-    onLoaded: root.pressureCpu = Metrics.pressure(text())
-    onLoadFailed: root.pressureCpu = null
-  }
-  FileView {
-    id: pressureMemoryFile; path: "/proc/pressure/memory"; printErrors: false
-    onLoaded: root.pressureMemory = Metrics.pressure(text())
-    onLoadFailed: root.pressureMemory = null
-  }
-  FileView {
-    id: pressureIoFile; path: "/proc/pressure/io"; printErrors: false
-    onLoaded: root.pressureIo = Metrics.pressure(text())
-    onLoadFailed: root.pressureIo = null
-  }
-  Process {
-    id: processReader
-    command: ["timeout", "5", "python3", decodeURIComponent(Qt.resolvedUrl("scripts/processes.py").toString().replace(/^file:\/\//, ""))]
-    stdout: StdioCollector { id: processOutput; waitForEnd: true }
-    onExited: function(code) {
-      if (!root.processesActive) return
-      if (code !== 0) { root.processError = "Process readings unavailable. Check that Python 3 is installed."; root.processes = []; root._previousProcesses = null; return }
-      try {
-        var snapshot = JSON.parse(processOutput.text)
-        root.processes = Metrics.processRates(root._previousProcesses, snapshot)
-        root._previousProcesses = snapshot
-        root.processUpdated = Date.now()
-        root.processError = ""
-      } catch (e) { root.processError = "Could not read processes."; root.processes = []; root._previousProcesses = null }
+    onTriggered: {
+      root.refreshRoute()
+      if (root.cpuTemp === null && !cpuTempProbe.running) cpuTempProbe.running = true
     }
   }
+
   Timer {
     interval: Math.max(2000, root.refreshIntervalSec * 1000)
-    running: root.processesActive; repeat: true
+    running: root.processesActive
+    repeat: true
     onTriggered: root.refreshProcesses()
   }
-
-  Component.onCompleted: cpuTempProbe.running = true
 }

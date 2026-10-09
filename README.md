@@ -3,9 +3,11 @@
 A compact bar widget that opens into a live system dashboard. See what is busy,
 what changed, and which processes are responsible — without leaving your desktop.
 
-<img src="docs/overview.png" alt="Live system overview" width="495">
+<img src="docs/overview.png" alt="Overview: CPU and memory cards, history chart, GPU, network and storage" width="540">
 
-[View the process monitor](docs/processes.png)
+| Resources | Activity | Processes | Settings |
+| --- | --- | --- | --- |
+| [<img src="docs/resources.png" alt="Per-core load, memory, pressure and GPU" width="200">](docs/resources.png) | [<img src="docs/activity.png" alt="Network traffic history and storage" width="200">](docs/activity.png) | [<img src="docs/processes.png" alt="Searchable process list" width="200">](docs/processes.png) | [<img src="docs/settings.png" alt="Bar readings, style and units" width="200">](docs/settings.png) |
 
 ## The dashboard
 
@@ -14,10 +16,12 @@ what changed, and which processes are responsible — without leaving your deskt
   CPU, memory and GPU, with **1, 5 or 15 minutes** of history and hover readouts.
 - **Resources:** every logical CPU, package temperature, available memory,
   reclaimable cache, swap, GPU/VRAM, and CPU/memory/I/O pressure.
-- **Activity:** download/upload rates, auto-scaled traffic history, interface
-  lifetime totals, and storage usage/free space for the selected mountpoint.
+- **Activity:** download/upload rates, auto-scaled traffic history (hover for
+  both rates at a moment), interface lifetime totals, and storage usage/free
+  space for the selected mountpoint.
 - **Processes:** live CPU and resident memory, PID, user and state. Search by
-  name/user/PID, sort by CPU/memory/name, or pause the list to inspect it.
+  name/user/PID, sort by CPU/memory/name, or pause the list to inspect it. The
+  list keeps your scroll position as it refreshes.
 - **Settings:** choose bar chips, bar style, units, refresh interval, interface and
   mountpoint. Changes use the same settings as Omarchy's plugin settings screen.
 
@@ -60,6 +64,8 @@ clickable icon, and unavailable hardware never produces a misleading zero.
 
 Choose a bar style under Settings → Bar style:
 
+<img src="docs/bar-styles.png" alt="All seven bar styles" width="585">
+
 | Style | Shows |
 | --- | --- |
 | Icons + values | The default: an icon next to each reading |
@@ -71,8 +77,17 @@ Choose a bar style under Settings → Bar style:
 | Grouped tint, values only | Grouped tint without icons — colour already says which reading is which |
 
 Tints are mixed into your theme's bar colour rather than replacing it, so they
-stay subtle on light and dark themes. Alert thresholds: CPU/GPU ≥75% / ≥90%,
-memory/VRAM ≥80% / ≥92%, temperatures ≥75°C / ≥90°C, disk ≥85% / ≥95%.
+stay subtle on light and dark themes.
+
+Alert thresholds (warning / critical) are shared by the bar's alert style and
+the dashboard's meters and charts, so they never disagree:
+
+| Reading | Warning | Critical |
+| --- | --- | --- |
+| CPU, GPU, per-core | ≥75% | ≥90% |
+| Memory, VRAM | ≥80% | ≥92% |
+| CPU/GPU temperature | ≥75°C | ≥90°C |
+| Disk | ≥85% | ≥95% |
 
 | Setting | Default |
 | --- | --- |
@@ -87,9 +102,12 @@ memory/VRAM ≥80% / ≥92%, temperatures ≥75°C / ≥90°C, disk ≥85% / ≥
 | Disk mountpoint | `/` |
 
 Network auto-detection runs every 30 seconds. Switching interfaces resets rate
-baselines and clears old traffic from history. Storage always follows the
-configured path, not whichever drive happens to be largest. Sensor discovery
-uses hwmon names and prefers package-wide CPU readings.
+baselines and clears old traffic from history. A named interface that doesn't
+exist shows "not found" rather than zero traffic. Storage always follows the
+configured path, not whichever drive happens to be largest. Text settings save
+on Enter or when you leave the field, only if the value changed; `Esc`
+restores the saved value. Sensor discovery uses hwmon names and prefers
+package-wide CPU readings.
 
 ## Reading the numbers
 
@@ -139,26 +157,34 @@ or reconnects can recover. Only the first readable GPU is displayed.
 | AMD | `amdgpu` sysfs; not verified on physical AMD hardware |
 | Intel | `gpu_busy_percent` where exposed; not verified on physical Intel hardware. Most i915 systems lack this reading and show unavailable |
 
-Missing sensors remain unavailable. Battery, fan speeds, per-disk I/O,
+With no readable GPU, the dashboard says so instead of drawing an empty
+chart. Missing sensors remain unavailable. Battery, fan speeds, per-disk I/O,
 process termination, process trees and persistent history are not included.
 
 ## Development
 
 ```bash
-./tests/run       # JS/Python regression tests + manifest validation
-./tests/qml-smoke # Native live-data checks; requires installed Omarchy/Quickshell
+./tests/run         # JS/Python regression tests + manifest validation
+./tests/qml-smoke   # Native live-data checks; requires installed Omarchy/Quickshell
+./tests/screenshots # Regenerate docs/*.png from live readings (~90 s)
 ```
 
-To save screenshots from the native render checks:
+Keep the smoke test's rendered frames with
+`SYSMON_CAPTURE_DIR=/tmp/sysmon-preview ./tests/qml-smoke`. For a quick
+screenshot preview, use `SYSMON_WARMUP=5 ./tests/screenshots /tmp/shots`.
 
-```bash
-mkdir -p /tmp/sysmon-preview
-SYSMON_CAPTURE_DIR=/tmp/sysmon-preview ./tests/qml-smoke
-```
+| File | Role |
+| --- | --- |
+| `Panel.qml` | Entry point: bar button, popup, keyboard routing, saving settings |
+| `Service.qml` | Samples the machine; GPU backends live in `*Backend.qml` |
+| `Dashboard.qml` | Popup frame: heading, tabs, active view, footer |
+| `views/` | One file per tab, plus settings |
+| `components/` | Shared UI: `BarReadings` (the bar itself), charts, cards, theme |
+| `Model.js` | Bar logic: chips, styles, thresholds, compact formatting, tooltip |
+| `Metrics.js` | Kernel parsing and dashboard maths |
+| `scripts/processes.py` | One read-only procfs snapshot for the Processes view |
 
-`Panel.qml` owns the bar and keyboard routing. `Dashboard.qml` owns the panel
-frame; `views/` and `components/` contain the UI. `Service.qml` samples the
-machine. `Model.js` and `Metrics.js` are pure, Node-tested logic.
+`Model.js` and `Metrics.js` are pure and Node-tested.
 
 ## License
 

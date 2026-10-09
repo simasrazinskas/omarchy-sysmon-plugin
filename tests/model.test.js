@@ -4,21 +4,6 @@ const Model = require("../Model.js")
 
 // Real samples taken from a running machine, so the parsers are tested against
 // the exact shapes the kernel and nvidia-smi actually emit.
-const PROC_STAT = [
-  "cpu  5130975 721 1219628 352675467 245032 288590 68337 0 0 0",
-  "cpu0 259387 39 61553 17627395 12938 20826 12345 0 0 0",
-  "intr 1234567890",
-  ""
-].join("\n")
-
-const PROC_MEMINFO = [
-  "MemTotal:       65593584 kB",
-  "MemFree:        41234567 kB",
-  "MemAvailable:   47000000 kB",
-  "Buffers:         1234567 kB",
-  ""
-].join("\n")
-
 const PROC_NET_DEV = [
   "Inter-|   Receive                                                |  Transmit",
   " face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed",
@@ -26,59 +11,6 @@ const PROC_NET_DEV = [
   "enp129s0: 31866150334 26028235    0   30    0     0          0     36467 3371386801 6306183    0    0    0     0       0          0",
   ""
 ].join("\n")
-
-const DF_OUTPUT = [
-  "Filesystem     1024-blocks      Used Available Capacity Mounted on",
-  "/dev/mapper/root 975019084 221093736 704369788      24% /",
-  ""
-].join("\n")
-
-// ---------------------------------------------------------------- /proc/stat
-
-test("parseCpuTotals sums the aggregate line and folds iowait into idle", () => {
-  const totals = Model.parseCpuTotals(PROC_STAT)
-  // user+nice+system+idle+iowait+irq+softirq+steal, guest excluded because the
-  // kernel already counts it inside user.
-  assert.equal(totals.total, 5130975 + 721 + 1219628 + 352675467 + 245032 + 288590 + 68337 + 0)
-  assert.equal(totals.idle, 352675467 + 245032)
-})
-
-test("parseCpuTotals returns null when there is no cpu line", () => {
-  assert.equal(Model.parseCpuTotals("intr 123\nctxt 456"), null)
-  assert.equal(Model.parseCpuTotals(""), null)
-})
-
-test("cpuPercent needs two samples, so the first tick reports null not zero", () => {
-  const totals = Model.parseCpuTotals(PROC_STAT)
-  assert.equal(Model.cpuPercent(null, totals), null)
-})
-
-test("cpuPercent computes the busy share between two samples", () => {
-  const previous = { total: 1000, idle: 900 }
-  const current = { total: 1100, idle: 950 }
-  // 100 jiffies elapsed, 50 of them idle.
-  assert.equal(Model.cpuPercent(previous, current), 50)
-})
-
-test("cpuPercent clamps and rejects a non-advancing counter", () => {
-  assert.equal(Model.cpuPercent({ total: 1000, idle: 900 }, { total: 1000, idle: 900 }), null)
-  assert.equal(Model.cpuPercent({ total: 1000, idle: 500 }, { total: 1100, idle: 500 }), 100)
-})
-
-// ------------------------------------------------------------- /proc/meminfo
-
-test("parseMeminfo uses MemAvailable rather than MemFree", () => {
-  const mem = Model.parseMeminfo(PROC_MEMINFO)
-  assert.equal(mem.total, 65593584 * 1024)
-  assert.equal(mem.used, (65593584 - 47000000) * 1024)
-  // MemFree would have reported a far higher usage than the machine really has.
-  assert.ok(mem.percent > 28 && mem.percent < 29)
-})
-
-test("parseMeminfo returns null when a required field is absent", () => {
-  assert.equal(Model.parseMeminfo("MemTotal:  100 kB"), null)
-  assert.equal(Model.parseMeminfo(""), null)
-})
 
 // ------------------------------------------------------------ /proc/net/dev
 
@@ -154,16 +86,7 @@ test("parseSysfsGpu requires utilisation, since that is the chip's whole point",
   assert.equal(Model.parseSysfsGpu("", "1", "2", "55000"), null)
 })
 
-// -------------------------------------------------------------- disk + route
-
-test("parseDiskPercent reads the capacity column out of df -P", () => {
-  assert.equal(Model.parseDiskPercent(DF_OUTPUT), 24)
-})
-
-test("parseDiskPercent returns null when df failed or printed only a header", () => {
-  assert.equal(Model.parseDiskPercent("Filesystem 1024-blocks Used Available Capacity Mounted on"), null)
-  assert.equal(Model.parseDiskPercent(""), null)
-})
+// --------------------------------------------------------------------- route
 
 test("parseDefaultRouteIface names the device carrying the default route", () => {
   assert.equal(
@@ -205,13 +128,6 @@ test("formatTemp converts to Fahrenheit on request", () => {
   assert.equal(Model.formatTemp(42, "C"), "42°")
   assert.equal(Model.formatTemp(100, "F"), "212°")
   assert.equal(Model.formatTemp(null, "C"), "")
-})
-
-test("padLeft pins width so a growing value cannot shift the bar", () => {
-  assert.equal(Model.padLeft("5%", 4), "  5%")
-  assert.equal(Model.padLeft("100%", 4), "100%")
-  // Already wider than the pin: never truncate a real reading to fit.
-  assert.equal(Model.padLeft("1000%", 4), "1000%")
 })
 
 // --------------------------------------------------------------------- chips
@@ -304,11 +220,11 @@ test("barText renders nothing when every reading is missing", () => {
   assert.equal(Model.barText(null, null), "")
 })
 
-test("vertical bars drop the icons and stack the values", () => {
-  const vertical = Model.barTextVertical(fullState(), { showNet: false, showDisk: false })
-  assert.deepEqual(vertical.split("\n"), ["12%", "42°", "18G", "64%", "71°"])
+test("every chip value fits a vertical bar's stacked four-character cell", () => {
+  const values = Model.buildChips(fullState(), { showNet: false, showDisk: false }).map(c => c.value)
+  assert.deepEqual(values, ["12%", "42°", "18G", "64%", "71°"])
   // 28px of bar leaves no room for an icon next to a four-character reading.
-  for (const line of vertical.split("\n")) assert.ok(line.length <= 4)
+  for (const value of values) assert.ok(value.length <= 4)
 })
 
 // ------------------------------------------------------------------- tooltip
@@ -451,7 +367,6 @@ test("bar text follows the mode's layout", () => {
     showGpuTemp: false, showNet: false, showDisk: false }
   assert.equal(Model.barText(fullState(), { ...options, barMode: "values" }), "12% ")
   assert.equal(Model.barText(fullState(), { ...options, barMode: "minimal" }), Model.ICONS.cpu)
-  assert.equal(Model.barTextVertical(fullState(), { ...options, barMode: "minimal" }), Model.ICONS.cpu)
 })
 
 test("plain modes leave colour alone; tint modes colour every chip", () => {

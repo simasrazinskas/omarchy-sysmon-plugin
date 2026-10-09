@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.simasrazinskas.sysmon",
   "name": "System Monitor",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "author": "Simas Razinskas",
   "license": "MIT",
   "description": "Live system dashboard with history, per-core usage, resource pressure and searchable processes.",
